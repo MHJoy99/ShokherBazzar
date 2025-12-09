@@ -1,16 +1,18 @@
 
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { config } from '../config';
+import { useToast } from '../context/ToastContext';
 
 export const Cart: React.FC = () => {
   const { items, removeFromCart, updateQuantity, cartTotal, clearCart } = useCart();
   const { user, register } = useAuth();
+  const { showToast } = useToast();
   const [step, setStep] = useState(1); 
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'uddoktapay' | 'manual'>('uddoktapay');
@@ -20,9 +22,28 @@ export const Cart: React.FC = () => {
   const [createAccount, setCreateAccount] = useState(false);
   const [password, setPassword] = useState('');
   const [orderId, setOrderId] = useState<number | null>(null);
+  
+  // NEW: Detect return from Payment Gateway
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+      const status = searchParams.get('status');
+      const oid = searchParams.get('order_id');
+      
+      if (status === 'success' && oid) {
+          setOrderId(parseInt(oid));
+          setStep(3);
+          clearCart();
+      }
+  }, [searchParams, clearCart]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const copyToClipboard = (text: string) => {
+      navigator.clipboard.writeText(text);
+      showToast("Number Copied!", "success");
   };
 
   const handleCheckout = async (e: React.FormEvent) => {
@@ -56,13 +77,13 @@ export const Cart: React.FC = () => {
         });
 
         if (result.success) {
-            clearCart();
             setOrderId(result.id);
             if (result.payment_url) { 
                 // Redirect to Payment Gateway (UddoktaPay via WP)
                 window.location.href = result.payment_url; 
             } else { 
                 // Manual Payment Success
+                clearCart();
                 setStep(3); 
             }
         }
@@ -181,27 +202,108 @@ export const Cart: React.FC = () => {
                       </div>
                   </div>
                    <div className="bg-dark-900 p-8 rounded-2xl border border-white/10">
-                      <h3 className="text-lg font-black text-white uppercase italic mb-6">Payment Method</h3>
-                      <div className="flex gap-4 mb-6">
-                          <button type="button" onClick={() => setPaymentMethod('uddoktapay')} className={`flex-1 py-3 px-4 rounded-xl border font-bold text-sm transition-all ${paymentMethod === 'uddoktapay' ? 'bg-primary text-black border-primary' : 'bg-dark-950 text-gray-400 border-white/10 hover:bg-white/5'}`}>Automatic Payment</button>
-                          <button type="button" onClick={() => setPaymentMethod('manual')} className={`flex-1 py-3 px-4 rounded-xl border font-bold text-sm transition-all ${paymentMethod === 'manual' ? 'bg-primary text-black border-primary' : 'bg-dark-950 text-gray-400 border-white/10 hover:bg-white/5'}`}>Manual Send Money</button>
+                      <h3 className="text-lg font-black text-white uppercase italic mb-6">Select Payment Method</h3>
+                      
+                      <div className="grid grid-cols-2 gap-4 mb-8">
+                          {/* AUTOMATIC PAYMENT CARD */}
+                          <button 
+                            type="button" 
+                            onClick={() => setPaymentMethod('uddoktapay')} 
+                            className={`relative p-5 rounded-xl border-2 transition-all flex flex-col items-center gap-3 group overflow-hidden ${paymentMethod === 'uddoktapay' ? 'bg-primary/10 border-primary shadow-glow-sm' : 'bg-dark-950 border-white/10 hover:border-white/20'}`}
+                          >
+                               {paymentMethod === 'uddoktapay' && <div className="absolute top-2 right-2 text-primary"><i className="fas fa-check-circle"></i></div>}
+                               <div className="flex items-center gap-2 grayscale group-hover:grayscale-0 transition-all opacity-80 group-hover:opacity-100">
+                                   <div className="w-8 h-8 rounded-full bg-pink-600 flex items-center justify-center text-white text-[10px] font-bold">bKash</div>
+                                   <div className="w-8 h-8 rounded-full bg-orange-600 flex items-center justify-center text-white text-[10px] font-bold">Nagad</div>
+                                   <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-[10px] font-bold">Rckt</div>
+                               </div>
+                               <div className="text-center">
+                                   <p className={`font-black uppercase text-sm ${paymentMethod === 'uddoktapay' ? 'text-white' : 'text-gray-400'}`}>Instant Payment</p>
+                                   <p className="text-[10px] text-gray-500">Automated & Secure</p>
+                               </div>
+                          </button>
+
+                          {/* MANUAL PAYMENT CARD */}
+                          <button 
+                            type="button" 
+                            onClick={() => setPaymentMethod('manual')} 
+                            className={`relative p-5 rounded-xl border-2 transition-all flex flex-col items-center gap-3 group ${paymentMethod === 'manual' ? 'bg-white/10 border-white shadow-lg' : 'bg-dark-950 border-white/10 hover:border-white/20'}`}
+                          >
+                               {paymentMethod === 'manual' && <div className="absolute top-2 right-2 text-white"><i className="fas fa-check-circle"></i></div>}
+                               <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg group-hover:scale-110 transition-transform">
+                                   <i className="fas fa-paper-plane"></i>
+                               </div>
+                               <div className="text-center">
+                                   <p className={`font-black uppercase text-sm ${paymentMethod === 'manual' ? 'text-white' : 'text-gray-400'}`}>Send Money</p>
+                                   <p className="text-[10px] text-gray-500">Manual Verification</p>
+                               </div>
+                          </button>
                       </div>
-                      {paymentMethod === 'uddoktapay' ? (
-                          <div className="p-4 border border-primary/20 bg-primary/5 rounded-lg flex items-center gap-4">
-                              <div className="w-10 h-10 rounded bg-white flex items-center justify-center p-1"><i className="fas fa-credit-card text-black"></i></div>
-                              <div><p className="text-white font-bold text-sm">bKash / Nagad / Rocket</p><p className="text-xs text-gray-400">Secure automated payment via UddoktaPay</p></div>
-                          </div>
-                      ) : (
-                          <div className="space-y-4 animate-fade-in-up">
-                              <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-lg text-sm text-yellow-200">{config.payment.manualInstructions}</div>
-                              <div className="grid grid-cols-2 gap-4 text-xs font-mono bg-dark-950 p-4 rounded-lg">
-                                  <div><span className="text-gray-500 block">bKash Personal:</span><span className="text-white font-bold">{config.payment.bkashPersonal}</span></div>
-                                  <div><span className="text-gray-500 block">Nagad Personal:</span><span className="text-white font-bold">{config.payment.nagadPersonal}</span></div>
-                              </div>
-                              <input type="text" placeholder="Enter Transaction ID (TrxID)" className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary outline-none" required={paymentMethod === 'manual'} value={trxId} onChange={(e) => setTrxId(e.target.value)} />
-                              <input type="text" placeholder="Your bKash/Nagad Number" className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary outline-none" required={paymentMethod === 'manual'} value={senderNumber} onChange={(e) => setSenderNumber(e.target.value)} />
-                          </div>
-                      )}
+
+                      <AnimatePresence mode='wait'>
+                        {paymentMethod === 'uddoktapay' ? (
+                            <motion.div 
+                                key="auto"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="p-4 bg-primary/5 border border-primary/20 rounded-xl flex items-center gap-4"
+                            >
+                                <div className="w-12 h-12 bg-dark-950 rounded-lg flex items-center justify-center text-primary text-xl shadow-glow-sm">
+                                    <i className="fas fa-bolt"></i>
+                                </div>
+                                <div>
+                                    <p className="text-white font-bold text-sm">Best Choice</p>
+                                    <p className="text-xs text-gray-400">Payment confirms instantly. No waiting.</p>
+                                </div>
+                            </motion.div>
+                        ) : (
+                            <motion.div 
+                                key="manual"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="space-y-4"
+                            >
+                                <div className="p-4 bg-white/5 rounded-xl border border-white/10 text-center">
+                                    <p className="text-sm text-gray-300 mb-4">{config.payment.manualInstructions}</p>
+                                    
+                                    <div className="grid gap-3">
+                                        <div className="flex items-center justify-between bg-dark-950 p-3 rounded-lg border border-pink-500/30 relative overflow-hidden">
+                                            <div className="absolute left-0 top-0 w-1 h-full bg-pink-500"></div>
+                                            <span className="text-pink-500 font-bold text-xs uppercase ml-2">bKash Personal</span>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-white font-mono font-bold">{config.payment.bkashPersonal}</span>
+                                                <button type="button" onClick={() => copyToClipboard(config.payment.bkashPersonal)} className="text-gray-500 hover:text-white"><i className="fas fa-copy"></i></button>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between bg-dark-950 p-3 rounded-lg border border-orange-500/30 relative overflow-hidden">
+                                            <div className="absolute left-0 top-0 w-1 h-full bg-orange-500"></div>
+                                            <span className="text-orange-500 font-bold text-xs uppercase ml-2">Nagad Personal</span>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-white font-mono font-bold">{config.payment.nagadPersonal}</span>
+                                                <button type="button" onClick={() => copyToClipboard(config.payment.nagadPersonal)} className="text-gray-500 hover:text-white"><i className="fas fa-copy"></i></button>
+                                            </div>
+                                        </div>
+                                         <div className="flex items-center justify-between bg-dark-950 p-3 rounded-lg border border-purple-500/30 relative overflow-hidden">
+                                            <div className="absolute left-0 top-0 w-1 h-full bg-purple-500"></div>
+                                            <span className="text-purple-500 font-bold text-xs uppercase ml-2">Rocket Personal</span>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-white font-mono font-bold">{config.payment.rocketPersonal}</span>
+                                                <button type="button" onClick={() => copyToClipboard(config.payment.rocketPersonal)} className="text-gray-500 hover:text-white"><i className="fas fa-copy"></i></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3 pt-4 border-t border-white/5">
+                                    <input type="text" placeholder="Enter Transaction ID (TrxID)" className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-white outline-none font-mono" required={paymentMethod === 'manual'} value={trxId} onChange={(e) => setTrxId(e.target.value)} />
+                                    <input type="text" placeholder="Your Sender Number" className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-white outline-none" required={paymentMethod === 'manual'} value={senderNumber} onChange={(e) => setSenderNumber(e.target.value)} />
+                                </div>
+                            </motion.div>
+                        )}
+                      </AnimatePresence>
+
                   </div>
                   <button disabled={loading} type="submit" className="w-full bg-green-600 hover:bg-green-500 text-white font-black uppercase italic tracking-wider py-4 rounded-xl shadow-glow transition-all">
                     {loading ? 'Processing...' : (paymentMethod === 'uddoktapay' ? `Pay ৳${cartTotal.toFixed(0)} Now` : `Verify Payment ৳${cartTotal.toFixed(0)}`)}

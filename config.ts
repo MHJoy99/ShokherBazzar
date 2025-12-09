@@ -4,23 +4,24 @@ export const config = {
     siteDescription: "Bangladesh's #1 Digital Game Store. Buy Steam Wallet, Google Play, and Game Codes with bKash/Nagad.",
     currency: "৳",
     payment: {
-      bkashPersonal: "01700-000000", // CHANGE THIS
-      nagadPersonal: "01800-000000", // CHANGE THIS
-      rocketPersonal: "01900-000000", // CHANGE THIS
-      manualInstructions: "Go to your bKash/Nagad App, select 'Send Money', and transfer the total amount to the number below. Copy the TrxID and paste it here."
+      // EDIT YOUR PERSONAL NUMBERS HERE
+      bkashPersonal: "01983888331", 
+      nagadPersonal: "01983888331", 
+      rocketPersonal: "0000-000000", 
+      manualInstructions: "Go to your bKash/Nagad/Rocket App, select 'Send Money', and transfer the total amount to one of the numbers below. Copy the TrxID and paste it here."
     },
     contact: {
-      phone: "+880 1700-000000",
+      phone: "+880 1983888331",
       email: "admin@mhjoygamershub.com",
-      whatsapp: "https://wa.me/8801700000000"
+      whatsapp: "https://wa.me/01983888331"
     },
     social: {
-      facebook: "https://facebook.com",
-      discord: "https://discord.gg",
-      instagram: "https://instagram.com"
+      facebook: "https://facebook.com/mhjoygamershub",
+      discord: "https://discord.gg/zfGgdv4cWu",
+      instagram: "https://instagram.com/mhjoygamershub"
     },
     api: {
-        // If you set this to true, the app will try to hit the real WooCommerce API defined in core.tsx
+        // If you set this to true, the app will try to hit the real WooCommerce API defined in lib/api.ts
         // If false, it uses mock data.
         useRealApi: true 
     },

@@ -186,14 +186,16 @@ export const api = {
         
         let payment_url = null;
         
-        // 1. Check if the standard API returned a payment URL (WooCommerce sometimes does this)
+        // 1. Priority: Check if the plugin explicitly returned a redirect URL in the order meta or response
         if (order.payment_url) {
             payment_url = order.payment_url;
         } 
-        // 2. Fallback: For UddoktaPay, usually we need to go to the "Pay for Order" page
-        // Format: /checkout/order-pay/:order_id?pay_for_order=true&key=:order_key
+        else if (order.payment_result && order.payment_result.redirect_url) {
+            payment_url = order.payment_result.redirect_url;
+        }
+        // 2. Fallback: For standard WooCommerce gateways, redirect to the "Order Pay" endpoint
         else if (payment_method_id === 'uddoktapay') {
-             // Redirect to the WP checkout 'pay' endpoint on the NEW domain
+             // This standard endpoint usually forces the gateway to initialize
              payment_url = `https://admin.mhjoygamershub.com/checkout/order-pay/${order.id}/?pay_for_order=true&key=${order.order_key}`;
         }
 
