@@ -15,8 +15,8 @@ const WC_BASE_URL = "https://admin.mhjoygamershub.com/wp-json/wc/v3";
 const WP_BASE_URL = "https://admin.mhjoygamershub.com/wp-json/wp/v2";
 
 // NOTE: Generate new keys in WooCommerce > Settings > Advanced > REST API on your new site
-const CONSUMER_KEY = "ck_1096fe3ae14606686ad5d403e48a521260a1d98f";
-const CONSUMER_SECRET = "cs_bbf7f67357551485a2f7a09e87eb0477a7019a3f";
+const CONSUMER_KEY = "ck_97520f17fc4470d40b9625ea0cf0911c5a0ce9bb";
+const CONSUMER_SECRET = "cs_ad555ccecf6ebc4d1c84a3e14d74b53dd55de903";
 
 const getAuthHeaders = () => {
     const auth = btoa(`${CONSUMER_KEY}:${CONSUMER_SECRET}`);
