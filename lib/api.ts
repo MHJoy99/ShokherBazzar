@@ -189,9 +189,27 @@ export const api = {
     }
   },
 
+  // --- SEND CONTACT FORM TO WORDPRESS ---
   sendMessage: async (formData: any): Promise<boolean> => {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      return true;
+      try {
+          // We use the custom endpoint created in functions.php
+          // Note: We access the root WP REST API, not the /wp/v2/ or /wc/v3/ namespaces directly for custom routes usually
+          // But our fetchWordPress helper appends /wp/v2. We need a raw fetch here to hit /custom/v1
+          
+          const response = await fetch('https://bazaar.mhjoybots.store/wp-json/custom/v1/contact', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(formData)
+          });
+
+          if (!response.ok) throw new Error('Failed to send message');
+          return true;
+      } catch (error) {
+          console.error("Contact Form Error:", error);
+          throw error;
+      }
   },
 
   // --- AUTHENTICATION ---

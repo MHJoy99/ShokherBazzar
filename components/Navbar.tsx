@@ -11,21 +11,43 @@ export const Navbar: React.FC = () => {
   const { itemCount } = useCart();
   const { user } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false); // NEW: Mobile Search State
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false); 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [hoveredNav, setHoveredNav] = useState<string | null>(null);
   const navigate = useNavigate();
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
+  // Search Logic with Debounce
   useEffect(() => {
     const timer = setTimeout(async () => {
         if (searchQuery.length < 2) { setSearchResults([]); return; }
+        // Performance: In a real app, you'd search via API endpoint like /products?search=...
+        // For now, we fetch all (cached usually by browser) and filter locally
         const all = await api.getProducts('all');
-        setSearchResults(all.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 5));
-    }, 300);
+        const filtered = all.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 5);
+        setSearchResults(filtered);
+    }, 300); // 300ms debounce
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Handle "Enter" key press
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+          e.preventDefault();
+          if (searchResults.length > 0) {
+              // Navigate to the first result
+              handleNavigate(searchResults[0].id);
+          }
+      }
+  };
+
+  const handleNavigate = (id: number) => {
+      setSearchResults([]); 
+      setSearchQuery(''); 
+      setIsMobileSearchOpen(false); 
+      navigate(`/product/${id}`);
+  };
 
   // Close search results when clicking outside
   useEffect(() => {
@@ -147,6 +169,7 @@ export const Navbar: React.FC = () => {
                     type="text" 
                     value={searchQuery} 
                     onChange={e => setSearchQuery(e.target.value)} 
+                    onKeyDown={handleKeyDown}
                     placeholder="Search..." 
                     className="w-full bg-dark-950/50 backdrop-blur rounded-xl px-5 py-3 pl-12 text-white border border-white/10 focus:border-primary outline-none transition-all focus:bg-dark-900 text-sm" 
                   />
@@ -161,13 +184,18 @@ export const Navbar: React.FC = () => {
                     className="absolute top-full left-0 w-full bg-dark-900 border border-white/10 rounded-xl mt-3 overflow-hidden shadow-2xl z-50"
                   >
                       {searchResults.map(p => (
-                          <div key={p.id} onClick={() => { setSearchResults([]); setSearchQuery(''); navigate(`/product/${p.id}`); }} className="p-3 hover:bg-white/5 cursor-pointer flex gap-4 text-white border-b border-white/5 last:border-0 group">
+                          <Link 
+                            to={`/product/${p.id}`}
+                            key={p.id} 
+                            onClick={() => handleNavigate(p.id)} 
+                            className="p-3 hover:bg-white/5 cursor-pointer flex gap-4 text-white border-b border-white/5 last:border-0 group"
+                          >
                              <img src={p.images[0].src} className="w-12 h-12 rounded-lg object-cover" alt="" />
                              <div className="flex flex-col justify-center">
                                  <p className="text-sm font-bold group-hover:text-primary transition-colors">{p.name}</p>
                                  <p className="text-xs text-gray-400">From <span className="text-white font-bold">৳{p.price}</span></p>
                              </div>
-                          </div>
+                          </Link>
                       ))}
                   </motion.div>
               )}
@@ -219,7 +247,7 @@ export const Navbar: React.FC = () => {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    className="absolute top-full left-0 w-full bg-dark-950 border-b border-white/10 z-40 overflow-visible"
+                    className="absolute top-full left-0 w-full bg-dark-950 border-b border-white/10 z-40 overflow-visible shadow-2xl"
                 >
                     <div className="p-4 relative">
                         <div className="relative">
@@ -228,23 +256,34 @@ export const Navbar: React.FC = () => {
                                 type="text" 
                                 value={searchQuery} 
                                 onChange={e => setSearchQuery(e.target.value)} 
+                                onKeyDown={handleKeyDown}
                                 placeholder="Search products..." 
                                 className="w-full bg-dark-900 border border-white/10 rounded-xl px-5 py-3 pl-12 text-white focus:border-primary outline-none" 
                             />
                             <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                            {searchResults.length > 0 && (
+                                <button onClick={() => handleNavigate(searchResults[0].id)} className="absolute right-3 top-1/2 -translate-y-1/2 text-primary font-bold text-xs uppercase bg-white/10 px-2 py-1 rounded">
+                                    GO <i className="fas fa-arrow-right ml-1"></i>
+                                </button>
+                            )}
                         </div>
                         
                         {/* MOBILE SEARCH RESULTS */}
                         {searchResults.length > 0 && searchQuery && (
-                            <div className="absolute top-full left-0 w-full bg-dark-900 border-x border-b border-white/10 rounded-b-xl shadow-2xl z-50 max-h-[60vh] overflow-y-auto">
+                            <div className="mt-4 bg-dark-900 border border-white/10 rounded-xl overflow-hidden shadow-2xl max-h-[60vh] overflow-y-auto">
                                 {searchResults.map(p => (
-                                    <div key={p.id} onClick={() => { setSearchResults([]); setSearchQuery(''); setIsMobileSearchOpen(false); navigate(`/product/${p.id}`); }} className="p-3 border-b border-white/5 flex gap-4 text-white active:bg-white/5">
+                                    <Link 
+                                        to={`/product/${p.id}`}
+                                        key={p.id} 
+                                        onClick={() => handleNavigate(p.id)} 
+                                        className="p-3 border-b border-white/5 flex gap-4 text-white active:bg-white/10"
+                                    >
                                         <img src={p.images[0].src} className="w-12 h-12 rounded object-cover" alt="" />
                                         <div>
                                             <p className="text-sm font-bold">{p.name}</p>
                                             <p className="text-xs text-primary font-bold">৳{p.price}</p>
                                         </div>
-                                    </div>
+                                    </Link>
                                 ))}
                             </div>
                         )}

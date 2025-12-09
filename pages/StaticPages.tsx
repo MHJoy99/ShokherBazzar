@@ -28,11 +28,24 @@ export const ContactPage: React.FC = () => {
     const { showToast } = useToast();
     const [loading, setLoading] = useState(false);
     const [sent, setSent] = useState(false);
+    
+    // State for form fields
+    const [formData, setFormData] = useState({ name: '', email: '', message: '' });
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        try { await api.sendMessage({}); setSent(true); showToast("Message sent successfully!"); } catch (error) { showToast("Failed to send message", 'error'); } finally { setLoading(false); }
+        try { 
+            await api.sendMessage(formData); 
+            setSent(true); 
+            showToast("Message sent successfully!"); 
+        } catch (error) { 
+            showToast("Failed to send message", 'error'); 
+        } finally { 
+            setLoading(false); 
+        }
     };
+
     return (
         <PageLayout title="Contact Support">
             {!sent ? (
@@ -43,8 +56,30 @@ export const ContactPage: React.FC = () => {
                         <div className="bg-dark-950 p-6 rounded-xl border border-white/10"><i className="fab fa-whatsapp text-green-500 text-2xl mb-4"></i><h3 className="text-white font-bold">WhatsApp</h3><p className="text-gray-400">{config.contact.phone}</p></div>
                     </div>
                     <form onSubmit={handleSubmit} className="space-y-4 not-prose">
-                        <input required type="text" placeholder="Your Name" className="w-full bg-dark-950 border border-white/10 p-4 rounded-lg text-white focus:border-primary outline-none" />
-                        <textarea required placeholder="Your Message" rows={4} className="w-full bg-dark-950 border border-white/10 p-4 rounded-lg text-white focus:border-primary outline-none"></textarea>
+                        <input 
+                            required 
+                            type="text" 
+                            placeholder="Your Name" 
+                            value={formData.name}
+                            onChange={(e) => setFormData({...formData, name: e.target.value})}
+                            className="w-full bg-dark-950 border border-white/10 p-4 rounded-lg text-white focus:border-primary outline-none" 
+                        />
+                        <input 
+                            required 
+                            type="email" 
+                            placeholder="Your Email" 
+                            value={formData.email}
+                            onChange={(e) => setFormData({...formData, email: e.target.value})}
+                            className="w-full bg-dark-950 border border-white/10 p-4 rounded-lg text-white focus:border-primary outline-none" 
+                        />
+                        <textarea 
+                            required 
+                            placeholder="Your Message" 
+                            rows={4} 
+                            value={formData.message}
+                            onChange={(e) => setFormData({...formData, message: e.target.value})}
+                            className="w-full bg-dark-950 border border-white/10 p-4 rounded-lg text-white focus:border-primary outline-none"
+                        ></textarea>
                         <button disabled={loading} className="bg-primary hover:bg-primary-hover text-black font-bold uppercase px-8 py-3 rounded-lg transition-colors">{loading ? 'Sending...' : 'Send Message'}</button>
                     </form>
                 </>

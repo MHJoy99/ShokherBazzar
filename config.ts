@@ -11,7 +11,7 @@ export const config = {
     },
     contact: {
       phone: "+880 1700-000000",
-      email: "support@steambazaar.com",
+      email: "admin@mhjoygamershub.com",
       whatsapp: "https://wa.me/8801700000000"
     },
     social: {
