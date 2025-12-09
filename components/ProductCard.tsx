@@ -13,7 +13,12 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
   return (
     <motion.div whileHover={{ y: -8 }} className="bg-dark-900 rounded-xl overflow-hidden border border-white/5 hover:border-primary/50 transition-all group h-full flex flex-col shadow-lg hover:shadow-glow-sm">
        <Link to={`/product/${product.id}`} className="relative block aspect-[3/4] bg-dark-950 overflow-hidden">
-          <img src={product.images[0].src} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={product.name} />
+          <img 
+            src={product.images[0].src} 
+            loading="lazy"
+            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+            alt={product.name} 
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-dark-900 via-transparent to-transparent opacity-60"></div>
           
           {product.platform && (

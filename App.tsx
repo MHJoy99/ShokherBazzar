@@ -1,23 +1,35 @@
 
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 
-// Modular Imports
+// Core Imports (Keep vital components eager for LCP)
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { ToastProvider } from './context/ToastContext';
+import { SkeletonHero } from './components/Skeleton';
 
-import { Home } from './pages/Home';
-import { ProductDetail } from './pages/ProductDetail';
-import { Cart } from './pages/Cart';
-import { Admin } from './pages/Admin';
-import { CategoryPage } from './pages/CategoryPage';
-import { LoginPage, DashboardPage } from './pages/AuthPages';
-import { AboutPage, ContactPage, TermsPage, PrivacyPage, RefundPage } from './pages/StaticPages';
-import { NotFound } from './pages/NotFound';
+// Lazy Load Pages to reduce bundle size
+const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
+const ProductDetail = lazy(() => import('./pages/ProductDetail').then(module => ({ default: module.ProductDetail })));
+const Cart = lazy(() => import('./pages/Cart').then(module => ({ default: module.Cart })));
+const CategoryPage = lazy(() => import('./pages/CategoryPage').then(module => ({ default: module.CategoryPage })));
+const Admin = lazy(() => import('./pages/Admin').then(module => ({ default: module.Admin })));
+const NotFound = lazy(() => import('./pages/NotFound').then(module => ({ default: module.NotFound })));
+
+// Lazy load Auth & Static pages which export multiple components
+const AuthPages = import('./pages/AuthPages');
+const LoginPage = lazy(() => AuthPages.then(module => ({ default: module.LoginPage })));
+const DashboardPage = lazy(() => AuthPages.then(module => ({ default: module.DashboardPage })));
+
+const StaticPages = import('./pages/StaticPages');
+const AboutPage = lazy(() => StaticPages.then(module => ({ default: module.AboutPage })));
+const ContactPage = lazy(() => StaticPages.then(module => ({ default: module.ContactPage })));
+const TermsPage = lazy(() => StaticPages.then(module => ({ default: module.TermsPage })));
+const PrivacyPage = lazy(() => StaticPages.then(module => ({ default: module.PrivacyPage })));
+const RefundPage = lazy(() => StaticPages.then(module => ({ default: module.RefundPage })));
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -34,6 +46,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 };
 
+// Simple Loading Fallback
+const PageLoader = () => (
+    <div className="min-h-screen flex items-center justify-center bg-dark-950">
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+    </div>
+);
+
 const App: React.FC = () => {
   return (
     <HelmetProvider>
@@ -42,24 +61,26 @@ const App: React.FC = () => {
             <CartProvider>
                 <Router>
                 <Layout>
-                    <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/product/:id" element={<ProductDetail />} />
-                    <Route path="/category/:slug" element={<CategoryPage />} />
-                    <Route path="/cart" element={<Cart />} />
-                    <Route path="/admin" element={<Admin />} />
-                    
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route path="/dashboard" element={<DashboardPage />} />
+                    <Suspense fallback={<PageLoader />}>
+                        <Routes>
+                            <Route path="/" element={<Home />} />
+                            <Route path="/product/:id" element={<ProductDetail />} />
+                            <Route path="/category/:slug" element={<CategoryPage />} />
+                            <Route path="/cart" element={<Cart />} />
+                            <Route path="/admin" element={<Admin />} />
+                            
+                            <Route path="/login" element={<LoginPage />} />
+                            <Route path="/dashboard" element={<DashboardPage />} />
 
-                    <Route path="/about" element={<AboutPage />} />
-                    <Route path="/contact" element={<ContactPage />} />
-                    <Route path="/terms" element={<TermsPage />} />
-                    <Route path="/privacy" element={<PrivacyPage />} />
-                    <Route path="/refund" element={<RefundPage />} />
-                    
-                    <Route path="*" element={<NotFound />} />
-                    </Routes>
+                            <Route path="/about" element={<AboutPage />} />
+                            <Route path="/contact" element={<ContactPage />} />
+                            <Route path="/terms" element={<TermsPage />} />
+                            <Route path="/privacy" element={<PrivacyPage />} />
+                            <Route path="/refund" element={<RefundPage />} />
+                            
+                            <Route path="*" element={<NotFound />} />
+                        </Routes>
+                    </Suspense>
                 </Layout>
                 </Router>
             </CartProvider>
