@@ -1,0 +1,225 @@
+
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { api } from '../lib/api';
+import { Product } from '../types';
+
+export const Navbar: React.FC = () => {
+  const { itemCount } = useCart();
+  const { user } = useAuth();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [hoveredNav, setHoveredNav] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+        if (searchQuery.length < 2) { setSearchResults([]); return; }
+        const all = await api.getProducts('all');
+        setSearchResults(all.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 5));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const navLinks = [
+      { 
+          title: "Gift Cards", 
+          slug: "gift-cards",
+          sub: [
+              { name: "Steam Wallet", icon: "fab fa-steam", link: "/category/steam" },
+              { name: "Google Play", icon: "fab fa-google-play", link: "/category/google-play" },
+              { name: "Xbox Live", icon: "fab fa-xbox", link: "/category/xbox" },
+              { name: "PlayStation", icon: "fab fa-playstation", link: "/category/psn" },
+              { name: "iTunes", icon: "fab fa-apple", link: "/category/itunes" },
+          ]
+      },
+      { 
+          title: "Games", 
+          slug: "games",
+          sub: [
+              { name: "Action", icon: "fas fa-fist-raised", link: "/category/action" },
+              { name: "RPG", icon: "fas fa-magic", link: "/category/rpg" },
+              { name: "Strategy", icon: "fas fa-chess", link: "/category/strategy" },
+              { name: "Sports", icon: "fas fa-futbol", link: "/category/sports" },
+              { name: "Simulation", icon: "fas fa-plane", link: "/category/simulation" },
+          ]
+      },
+      { 
+          title: "Accounts", 
+          slug: "accounts",
+          sub: [
+              { name: "Steam Accounts", icon: "fab fa-steam-symbol", link: "/category/steam-accounts" },
+              { name: "Valorant", icon: "fas fa-crosshairs", link: "/category/valorant" },
+              { name: "Fortnite", icon: "fas fa-shield-alt", link: "/category/fortnite" },
+              { name: "Netflix", icon: "fas fa-tv", link: "/category/netflix" },
+          ]
+      }
+  ];
+
+  return (
+    <>
+      <div className="bg-gradient-to-r from-blue-900 to-purple-900 text-white text-[10px] md:text-xs font-bold py-2 text-center fixed top-0 w-full z-[60] tracking-widest uppercase">
+        🚀 Instant Delivery 24/7 • 🇧🇩 Official BD Reseller • 💎 100% Secure
+      </div>
+      <nav className="fixed top-[32px] left-0 w-full z-50 glass border-b border-white/5 h-20 flex items-center shadow-2xl">
+        <div className="max-w-7xl mx-auto px-4 w-full flex justify-between gap-6 items-center">
+           <Link to="/" className="flex items-center gap-2 group z-50">
+              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center transform group-hover:rotate-12 transition-transform shadow-glow">
+                <i className="fas fa-gamepad text-black text-2xl"></i>
+              </div>
+              <div>
+                  <h1 className="text-xl font-black text-white italic tracking-tighter leading-none">STEAM<span className="text-primary">BAZAAR</span></h1>
+                  <p className="text-[9px] text-gray-400 uppercase tracking-widest">Digital Store</p>
+              </div>
+           </Link>
+           
+           <div className="hidden md:flex items-center gap-8 h-full">
+               {navLinks.map((nav) => (
+                   <div 
+                      key={nav.title}
+                      className="relative h-full flex items-center"
+                      onMouseEnter={() => setHoveredNav(nav.title)}
+                      onMouseLeave={() => setHoveredNav(null)}
+                   >
+                       <Link 
+                          to={`/category/${nav.slug}`} 
+                          className={`text-sm font-bold uppercase tracking-wide transition-colors flex items-center gap-1 ${hoveredNav === nav.title ? 'text-primary' : 'text-gray-300'}`}
+                        >
+                           {nav.title} <i className={`fas fa-chevron-down text-[10px] transition-transform ${hoveredNav === nav.title ? 'rotate-180' : ''}`}></i>
+                       </Link>
+                       <AnimatePresence>
+                           {hoveredNav === nav.title && (
+                               <motion.div
+                                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="absolute top-full left-1/2 -translate-x-1/2 pt-4 w-64"
+                               >
+                                   <div className="bg-dark-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden p-2 backdrop-blur-xl relative">
+                                       <div className="absolute top-0 left-0 w-full h-1 bg-primary"></div>
+                                       {nav.sub.map((item) => (
+                                           <Link 
+                                              key={item.name} 
+                                              to={item.link} 
+                                              className="flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 text-gray-300 hover:text-white transition-all group"
+                                           >
+                                               <div className="w-8 h-8 rounded-full bg-dark-950 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                                                   <i className={item.icon}></i>
+                                               </div>
+                                               <span className="text-sm font-bold">{item.name}</span>
+                                           </Link>
+                                       ))}
+                                   </div>
+                               </motion.div>
+                           )}
+                       </AnimatePresence>
+                   </div>
+               ))}
+               <Link to="/contact" className="text-sm font-bold text-gray-300 hover:text-white hover:text-primary transition-colors uppercase tracking-wide">Support</Link>
+           </div>
+
+           <div className="hidden md:block relative flex-1 max-w-md mx-4">
+              <div className="relative group">
+                  <input 
+                    type="text" 
+                    value={searchQuery} 
+                    onChange={e => setSearchQuery(e.target.value)} 
+                    placeholder="Search..." 
+                    className="w-full bg-dark-950/50 backdrop-blur rounded-xl px-5 py-3 pl-12 text-white border border-white/10 focus:border-primary outline-none transition-all focus:bg-dark-900 text-sm" 
+                  />
+                  <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-primary transition-colors"></i>
+              </div>
+              <AnimatePresence>
+              {searchResults.length > 0 && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute top-full left-0 w-full bg-dark-900 border border-white/10 rounded-xl mt-3 overflow-hidden shadow-2xl z-50"
+                  >
+                      {searchResults.map(p => (
+                          <div key={p.id} onClick={() => { setSearchResults([]); navigate(`/product/${p.id}`); }} className="p-3 hover:bg-white/5 cursor-pointer flex gap-4 text-white border-b border-white/5 last:border-0 group">
+                             <img src={p.images[0].src} className="w-12 h-12 rounded-lg object-cover" alt="" />
+                             <div className="flex flex-col justify-center">
+                                 <p className="text-sm font-bold group-hover:text-primary transition-colors">{p.name}</p>
+                                 <p className="text-xs text-gray-400">From <span className="text-white font-bold">৳{p.price}</span></p>
+                             </div>
+                          </div>
+                      ))}
+                  </motion.div>
+              )}
+              </AnimatePresence>
+           </div>
+
+           <div className="flex items-center gap-4 z-50">
+              <Link to="/cart" className="relative group">
+                 <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-primary group-hover:text-black transition-all">
+                    <i className="fas fa-shopping-cart text-sm"></i>
+                 </div>
+                 {itemCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold border-2 border-dark-900 shadow-glow">{itemCount}</span>}
+              </Link>
+              
+              {user ? (
+                   <Link to="/dashboard" className="flex items-center gap-2 bg-white/5 rounded-full pl-1 pr-3 py-1 hover:bg-white/10 transition-colors border border-white/10">
+                        <img src={user.avatar_url} className="w-8 h-8 rounded-full border border-primary" alt="User" />
+                        <span className="hidden md:block text-xs font-bold text-white uppercase">{user.username}</span>
+                   </Link>
+              ) : (
+                  <Link to="/login" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
+                      <i className="fas fa-user text-sm"></i>
+                  </Link>
+              )}
+
+              <button 
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="w-10 h-10 rounded-full bg-white/5 flex md:hidden items-center justify-center text-white active:scale-95 transition-transform"
+              >
+                  <i className={`fas ${isMobileMenuOpen ? 'fa-times' : 'fa-bars'}`}></i>
+              </button>
+           </div>
+        </div>
+      </nav>
+
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+            <motion.div
+               initial={{ opacity: 0, x: '100%' }}
+               animate={{ opacity: 1, x: 0 }}
+               exit={{ opacity: 0, x: '100%' }}
+               transition={{ type: "spring", damping: 25, stiffness: 200 }}
+               className="fixed inset-0 z-[55] bg-dark-950 pt-32 px-6 overflow-y-auto md:hidden"
+            >
+                <div className="flex flex-col gap-6">
+                    <input type="text" placeholder="Search products..." className="w-full bg-dark-900 border border-white/10 rounded-xl px-5 py-4 text-white focus:border-primary outline-none" />
+                    {navLinks.map((nav) => (
+                        <div key={nav.title} className="space-y-4">
+                            <h3 className="text-primary font-black uppercase tracking-widest text-sm border-b border-white/10 pb-2">{nav.title}</h3>
+                            <div className="grid grid-cols-2 gap-3">
+                                {nav.sub.map((item) => (
+                                    <Link key={item.name} to={item.link} onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 bg-dark-900 p-3 rounded-lg border border-white/5 active:bg-white/10">
+                                        <i className={`${item.icon} text-gray-400`}></i>
+                                        <span className="text-sm font-bold text-white">{item.name}</span>
+                                    </Link>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                    <Link to="/contact" onClick={() => setIsMobileMenuOpen(false)} className="bg-white/5 p-4 rounded-xl text-center font-bold text-white uppercase">Contact Support</Link>
+                    {user ? (
+                         <Link to="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="bg-primary/20 text-primary p-4 rounded-xl text-center font-bold uppercase">My Dashboard</Link>
+                    ) : (
+                         <Link to="/login" onClick={() => setIsMobileMenuOpen(false)} className="bg-primary/20 text-primary p-4 rounded-xl text-center font-bold uppercase">Login / Register</Link>
+                    )}
+                </div>
+            </motion.div>
+        )}
+      </AnimatePresence>
+      <div className="h-[32px]"></div> 
+    </>
+  );
+};
