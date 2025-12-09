@@ -29,9 +29,9 @@ export const Hero: React.FC<{ products: Product[] }> = ({ products }) => {
             transition={{ duration: 0.8 }}
             className="absolute inset-0"
          >
-            {/* Background Image: Fixed to Top Center to avoid cutting off heads/logos */}
+            {/* Background Image: Optimized for Mobile. Zoom effect only on MD+ */}
             <div 
-                className="absolute inset-0 bg-cover bg-top md:bg-center transition-transform duration-[10000ms] ease-linear scale-100 group-hover:scale-105" 
+                className="absolute inset-0 bg-cover bg-top md:bg-center transition-transform duration-[10000ms] ease-linear scale-100 md:group-hover:scale-105" 
                 style={{ backgroundImage: `url(${product.images[0].src})` }}
             ></div>
             
@@ -89,7 +89,7 @@ export const Hero: React.FC<{ products: Product[] }> = ({ products }) => {
                   </motion.div>
               </div>
 
-              {/* 3D Poster Card - Hidden on mobile to save space, or scaled down */}
+              {/* 3D Poster Card - Hidden on mobile to save space and performance */}
               <div className="hidden md:block md:col-span-5 relative perspective-1000">
                   <motion.div 
                      key={`img-${product.id}`}

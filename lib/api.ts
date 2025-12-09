@@ -1,5 +1,5 @@
 
-import { Product, Category, Order, User } from '../types';
+import { Product, Category, Order, User, OrderNote } from '../types';
 import { config } from '../config';
 
 // --- MOCK DATA FOR FALLBACK ONLY ---
@@ -181,7 +181,7 @@ export const api = {
         return { 
             id: order.id, 
             success: true,
-            // In a real UddoktaPay integration, you would handle the payment URL here
+            payment_url: order.payment_url || null
         };
     } catch (error) {
         console.error("Order Creation Failed:", error);
@@ -239,15 +239,37 @@ export const api = {
               id: o.id,
               status: o.status,
               total: o.total,
+              currency_symbol: o.currency_symbol,
               date_created: new Date(o.date_created).toLocaleDateString(),
+              customer_note: o.customer_note || "",
               line_items: o.line_items.map((i: any) => ({
                   name: i.name,
                   quantity: i.quantity,
-                  license_key: o.meta_data.find((m:any) => m.key === '_license_key' || m.key === 'serial_number')?.value || null, 
-                  image: "https://via.placeholder.com/150"
+                  // Safely check for license keys in meta_data
+                  license_key: o.meta_data.find((m:any) => m.key === '_license_key' || m.key === 'serial_number' || m.key === 'license_key')?.value || null, 
+                  image: i.image?.src || "https://via.placeholder.com/150",
+                  downloads: i.downloads || [] // Map download links
               }))
           }));
       } catch (error) {
+          return [];
+      }
+  },
+
+  // NEW: Fetch Order Notes (Admin -> Customer)
+  getOrderNotes: async (orderId: number): Promise<OrderNote[]> => {
+      try {
+          const notes = await fetchWooCommerce(`/orders/${orderId}/notes`);
+          // Filter only notes meant for the customer
+          return notes
+              .filter((n: any) => n.customer_note)
+              .map((n: any) => ({
+                  id: n.id,
+                  note: n.note,
+                  customer_note: n.customer_note,
+                  date_created: new Date(n.date_created).toLocaleString()
+              }));
+      } catch (e) {
           return [];
       }
   }

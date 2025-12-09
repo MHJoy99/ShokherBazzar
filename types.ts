@@ -51,15 +51,32 @@ export interface User {
   avatar_url: string;
 }
 
+export interface OrderNote {
+  id: number;
+  note: string;
+  customer_note: boolean;
+  date_created: string;
+}
+
+export interface OrderDownload {
+  id: string;
+  name: string;
+  file: string;
+  download_url: string;
+}
+
 export interface Order {
   id: number;
   status: string;
   total: string;
+  currency_symbol: string;
   date_created: string;
+  customer_note: string; // Note FROM customer
   line_items: {
       name: string;
       quantity: number;
       license_key?: string;
       image: string;
+      downloads?: OrderDownload[]; // For downloadable files
   }[];
 }

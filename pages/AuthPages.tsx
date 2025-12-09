@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
-import { Order } from '../types';
+import { Order, OrderNote } from '../types';
 import { Helmet } from 'react-helmet-async';
 import { config } from '../config';
 
@@ -93,6 +93,123 @@ export const LoginPage: React.FC = () => {
     );
 };
 
+// --- NEW COMPONENT FOR ORDER ROW EXPANSION ---
+const OrderRow: React.FC<{ order: Order }> = ({ order }) => {
+    const [expanded, setExpanded] = useState(false);
+    const [notes, setNotes] = useState<OrderNote[]>([]);
+    const [loadingNotes, setLoadingNotes] = useState(false);
+
+    const toggleExpand = async () => {
+        if (!expanded && notes.length === 0) {
+            setLoadingNotes(true);
+            const fetchedNotes = await api.getOrderNotes(order.id);
+            setNotes(fetchedNotes);
+            setLoadingNotes(false);
+        }
+        setExpanded(!expanded);
+    };
+
+    return (
+        <div className="bg-dark-900 border border-white/5 rounded-xl overflow-hidden transition-colors hover:border-white/20">
+            {/* Main Row */}
+            <div 
+                onClick={toggleExpand}
+                className="p-6 flex flex-col md:flex-row items-center justify-between gap-6 cursor-pointer"
+            >
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-dark-950 rounded flex items-center justify-center text-gray-500 border border-white/10 font-mono text-xs">
+                        #{order.id}
+                    </div>
+                    <div>
+                        <p className="text-white font-bold text-sm">
+                            {order.line_items[0]?.name || 'Unknown Item'} {order.line_items.length > 1 && `+ ${order.line_items.length - 1} more`}
+                        </p>
+                        <p className="text-gray-500 text-xs">{order.date_created}</p>
+                    </div>
+                </div>
+                <div className="text-right flex items-center gap-4">
+                    <div>
+                        <p className="text-primary font-bold">৳{order.total}</p>
+                        <span className={`inline-block px-2 py-1 text-[10px] font-bold uppercase rounded mt-1 border ${
+                            order.status === 'completed' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 
+                            order.status === 'processing' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 
+                            'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                        }`}>
+                            {order.status}
+                        </span>
+                    </div>
+                    <i className={`fas fa-chevron-down text-gray-500 transition-transform ${expanded ? 'rotate-180' : ''}`}></i>
+                </div>
+            </div>
+
+            {/* Expanded Content */}
+            {expanded && (
+                <div className="bg-dark-950/50 p-6 border-t border-white/5 text-sm space-y-6 animate-fade-in-up">
+                    
+                    {/* 1. Admin Notes (The requested fix) */}
+                    <div>
+                        <h4 className="text-gray-400 font-bold uppercase text-xs mb-3">Messages from Support</h4>
+                        {loadingNotes ? (
+                            <p className="text-gray-600 italic">Checking for messages...</p>
+                        ) : notes.length > 0 ? (
+                            <div className="space-y-3">
+                                {notes.map(note => (
+                                    <div key={note.id} className="bg-blue-500/10 border-l-4 border-blue-500 p-3 rounded-r">
+                                        <p className="text-gray-300">{note.note}</p>
+                                        <p className="text-[10px] text-gray-500 mt-1">{note.date_created}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-gray-600">No new messages.</p>
+                        )}
+                    </div>
+
+                    {/* 2. Downloadable Files (The fundamental fix) */}
+                    {order.line_items.some(i => i.downloads && i.downloads.length > 0) && (
+                        <div>
+                            <h4 className="text-gray-400 font-bold uppercase text-xs mb-3">Downloadable Files</h4>
+                            <div className="space-y-2">
+                                {order.line_items.map(item => (
+                                    item.downloads?.map(file => (
+                                        <div key={file.id} className="flex items-center justify-between bg-dark-900 p-3 rounded border border-white/10">
+                                            <span className="text-white font-bold">{file.name}</span>
+                                            <a 
+                                                href={file.download_url} 
+                                                target="_blank" 
+                                                rel="noreferrer"
+                                                className="bg-primary text-black text-xs font-bold px-3 py-1.5 rounded hover:bg-cyan-400"
+                                            >
+                                                Download
+                                            </a>
+                                        </div>
+                                    ))
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 3. Items Table */}
+                    <div>
+                         <h4 className="text-gray-400 font-bold uppercase text-xs mb-3">Order Items</h4>
+                         {order.line_items.map((item, idx) => (
+                             <div key={idx} className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
+                                 <span className="text-gray-300">{item.name} x{item.quantity}</span>
+                                 {/* Show key immediately if present here */}
+                                 {item.license_key && (
+                                     <span className="font-mono text-primary bg-primary/10 px-2 py-1 rounded select-all">
+                                         {item.license_key}
+                                     </span>
+                                 )}
+                             </div>
+                         ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 export const DashboardPage: React.FC = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
@@ -109,7 +226,6 @@ export const DashboardPage: React.FC = () => {
             setLoading(false); 
         };
         const fetchNotice = async () => {
-            // Admin can create a page with slug 'dashboard-notice' to show messages here
             const notice = await api.getPage('dashboard-notice');
             if (notice) setAnnouncement(notice);
         };
@@ -153,11 +269,9 @@ export const DashboardPage: React.FC = () => {
                     <h1 className="text-3xl font-black text-white uppercase italic mb-8 border-l-4 border-primary pl-4">{activeTab === 'orders' ? 'Order History' : activeTab === 'keys' ? 'Digital Vault' : 'Profile Settings'}</h1>
                     {loading ? (<div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-primary"></div></div>) : (
                         <div className="space-y-6">
+                            {/* NEW ORDER ROW COMPONENT IMPLEMENTATION */}
                             {activeTab === 'orders' && orders.map(order => (
-                                <div key={order.id} className="bg-dark-900 border border-white/5 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 hover:border-white/20 transition-colors">
-                                    <div className="flex items-center gap-4"><div className="w-12 h-12 bg-dark-950 rounded flex items-center justify-center text-gray-500 border border-white/10 font-mono text-xs">#{order.id}</div><div><p className="text-white font-bold text-sm">{order.line_items[0]?.name || 'Unknown Item'} {order.line_items.length > 1 && `+ ${order.line_items.length - 1} more`}</p><p className="text-gray-500 text-xs">{order.date_created}</p></div></div>
-                                    <div className="text-right"><p className="text-primary font-bold">৳{order.total}</p><span className="inline-block px-2 py-1 bg-green-500/10 text-green-500 text-[10px] font-bold uppercase rounded mt-1 border border-green-500/20">{order.status}</span></div>
-                                </div>
+                                <OrderRow key={order.id} order={order} />
                             ))}
                             {activeTab === 'orders' && orders.length === 0 && <p className="text-gray-500 text-center py-10">No orders found.</p>}
                             
