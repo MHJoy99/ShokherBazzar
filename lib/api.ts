@@ -10,24 +10,37 @@ export const MOCK_CATEGORIES: Category[] = [
 
 export const MOCK_PRODUCTS: Product[] = []; // Empty default, relies on API
 
-const BASE_URL = "https://bazaar.mhjoybots.store/wp-json/wc/v3";
-// NOTE: Ideally these should be in environment variables (e.g. import.meta.env.VITE_WC_KEY)
+const WC_BASE_URL = "https://bazaar.mhjoybots.store/wp-json/wc/v3";
+const WP_BASE_URL = "https://bazaar.mhjoybots.store/wp-json/wp/v2";
+
+// NOTE: Ideally these should be in environment variables
 const CONSUMER_KEY = "ck_1096fe3ae14606686ad5d403e48a521260a1d98f";
 const CONSUMER_SECRET = "cs_bbf7f67357551485a2f7a09e87eb0477a7019a3f";
 
+const getAuthHeaders = () => {
+    const auth = btoa(`${CONSUMER_KEY}:${CONSUMER_SECRET}`);
+    return { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' };
+};
+
 const fetchWooCommerce = async (endpoint: string, method = 'GET', body?: any) => {
-  const auth = btoa(`${CONSUMER_KEY}:${CONSUMER_SECRET}`);
   const config: RequestInit = {
     method,
-    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: body ? JSON.stringify(body) : undefined,
   };
-  const response = await fetch(`${BASE_URL}${endpoint}`, config);
+  const response = await fetch(`${WC_BASE_URL}${endpoint}`, config);
   if (!response.ok) {
       const err = await response.json();
       throw new Error(err.message || `API Error: ${response.statusText}`);
   }
   return response.json();
+};
+
+const fetchWordPress = async (endpoint: string) => {
+    // WP API usually doesn't need Basic Auth for reading public pages, but we send it just in case
+    const response = await fetch(`${WP_BASE_URL}${endpoint}`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error("WP API Error");
+    return response.json();
 };
 
 const mapWooProduct = (p: any): Product => ({
@@ -94,7 +107,6 @@ export const api = {
   getProductsByIds: async (ids: number[]): Promise<Product[]> => {
       if (!ids.length) return [];
       try {
-          // WooCommerce doesn't have a clean 'ids' filter in v3, so we fetch all or specific includes if supported
           const includes = ids.join(',');
           const data = await fetchWooCommerce(`/products?include=${includes}`);
           return data.map(mapWooProduct);
@@ -107,6 +119,22 @@ export const api = {
     } catch (error) {
       return MOCK_CATEGORIES;
     }
+  },
+
+  // --- CONTENT API (For Dashboard Notices) ---
+  getPage: async (slug: string): Promise<{ title: string, content: string } | null> => {
+      try {
+          const pages = await fetchWordPress(`/pages?slug=${slug}`);
+          if (pages.length > 0) {
+              return {
+                  title: pages[0].title.rendered,
+                  content: pages[0].content.rendered
+              };
+          }
+          return null;
+      } catch (e) {
+          return null;
+      }
   },
 
   // --- REAL ORDER CREATION ---
@@ -126,9 +154,10 @@ export const api = {
     }
 
     const payload = {
-        payment_method: orderData.payment_method === 'manual' ? 'bacs' : 'uddoktapay', // 'bacs' usually enables Bank/Manual
+        payment_method: orderData.payment_method === 'manual' ? 'bacs' : 'uddoktapay',
         payment_method_title: orderData.payment_method === 'manual' ? 'Manual Transfer (bKash/Nagad)' : 'Online Payment',
         set_paid: false,
+        customer_id: orderData.customer_id || 0, // Link order to user if logged in
         billing: {
             first_name: orderData.billing.first_name,
             last_name: orderData.billing.last_name,
@@ -149,13 +178,10 @@ export const api = {
 
     try {
         const order = await fetchWooCommerce('/orders', 'POST', payload);
-        
-        // If UddoktaPay plugin is active, it might handle redirection, but via API we might need to handle it manually.
-        // For now, we return success so the UI shows the "Done" step.
         return { 
             id: order.id, 
             success: true,
-            // In a real UddoktaPay integration, you would generate the payment URL here
+            // In a real UddoktaPay integration, you would handle the payment URL here
         };
     } catch (error) {
         console.error("Order Creation Failed:", error);
@@ -164,15 +190,11 @@ export const api = {
   },
 
   sendMessage: async (formData: any): Promise<boolean> => {
-      // Contact form usually requires a specific WP endpoint or 3rd party service
-      // Keeping mock for now as WP doesn't have a default 'contact' API
       await new Promise(resolve => setTimeout(resolve, 1500));
       return true;
   },
 
   // --- AUTHENTICATION ---
-  
-  // 1. REGISTER (REAL)
   register: async (userData: any): Promise<User> => {
       try {
           const payload = {
@@ -195,13 +217,8 @@ export const api = {
       }
   },
 
-  // 2. LOGIN (PARTIAL REAL / SIMULATED)
-  // WARNING: Standard WooCommerce API keys cannot authenticate USERS (Password check).
-  // You need the "JWT Authentication for WP-REST-API" plugin to do real password checking.
-  // For this version, we will Simulate login by checking if the customer exists via email.
   login: async (email: string): Promise<User> => {
       // SECURITY WARNING: This does NOT check passwords. It just finds the user.
-      // Install JWT Plugin for real security.
       const users = await fetchWooCommerce(`/customers?email=${email}`);
       if (users.length > 0) {
           const u = users[0];
@@ -215,7 +232,6 @@ export const api = {
       throw new Error("User not found.");
   },
 
-  // 3. GET ORDERS (REAL)
   getUserOrders: async (userId: number): Promise<Order[]> => {
       try {
           const orders = await fetchWooCommerce(`/orders?customer=${userId}`);
@@ -227,10 +243,8 @@ export const api = {
               line_items: o.line_items.map((i: any) => ({
                   name: i.name,
                   quantity: i.quantity,
-                  // License key usually comes from a plugin meta field. 
-                  // We check meta_data for common license manager keys.
                   license_key: o.meta_data.find((m:any) => m.key === '_license_key' || m.key === 'serial_number')?.value || null, 
-                  image: "https://via.placeholder.com/150" // WP API doesn't return product image in order line items by default
+                  image: "https://via.placeholder.com/150"
               }))
           }));
       } catch (error) {

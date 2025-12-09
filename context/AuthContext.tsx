@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState } from 'react';
 import { User } from '../types';
 import { api } from '../lib/api';
@@ -6,7 +5,7 @@ import { api } from '../lib/api';
 interface AuthContextType {
     user: User | null;
     login: (email: string) => Promise<void>;
-    register: (data: any) => Promise<void>;
+    register: (data: any) => Promise<User>;
     logout: () => void;
     isLoading: boolean;
 }
@@ -31,6 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const userData = await api.register(data);
             setUser(userData);
+            return userData;
         } finally {
             setIsLoading(false);
         }

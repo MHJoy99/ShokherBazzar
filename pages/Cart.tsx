@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
@@ -9,12 +10,16 @@ import { config } from '../config';
 
 export const Cart: React.FC = () => {
   const { items, removeFromCart, updateQuantity, cartTotal, clearCart } = useCart();
+  const { user, register } = useAuth();
   const [step, setStep] = useState(1); 
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'uddoktapay' | 'manual'>('uddoktapay');
   const [trxId, setTrxId] = useState('');
   const [senderNumber, setSenderNumber] = useState('');
   const [formData, setFormData] = useState({ first_name: '', last_name: '', email: '', phone: '' });
+  const [createAccount, setCreateAccount] = useState(false);
+  const [password, setPassword] = useState('');
+  const [orderId, setOrderId] = useState<number | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -24,9 +29,35 @@ export const Cart: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     try {
-        const result = await api.createOrder({ items, billing: formData, payment_method: paymentMethod, trxId: paymentMethod === 'manual' ? trxId : undefined, senderNumber: paymentMethod === 'manual' ? senderNumber : undefined });
+        let customerId = user?.id;
+
+        // Auto-Register if requested
+        if (!user && createAccount && password) {
+             try {
+                const newUser = await register({
+                    email: formData.email,
+                    password: password,
+                    first_name: formData.first_name,
+                    last_name: formData.last_name
+                });
+                customerId = newUser?.id; // API returns the new user object but context might not update immediately in this scope
+             } catch (regError) {
+                 alert("Account creation failed. Email might be in use. Proceeding as guest.");
+             }
+        }
+
+        const result = await api.createOrder({ 
+            items, 
+            billing: formData, 
+            payment_method: paymentMethod, 
+            trxId: paymentMethod === 'manual' ? trxId : undefined, 
+            senderNumber: paymentMethod === 'manual' ? senderNumber : undefined,
+            customer_id: customerId
+        });
+
         if (result.success) {
             clearCart();
+            setOrderId(result.id);
             if (result.payment_url) { window.location.href = result.payment_url; } else { setStep(3); }
         }
     } catch (error) { alert("Order failed. Please try again."); } finally { setLoading(false); }
@@ -53,6 +84,10 @@ export const Cart: React.FC = () => {
           <div className="absolute top-0 left-0 w-full h-1 bg-primary shadow-glow"></div>
           <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/20"><i className="fas fa-check text-4xl text-primary"></i></div>
           <h2 className="text-3xl font-black text-white mb-2 uppercase italic">Order Placed!</h2>
+          <div className="bg-dark-950 p-4 rounded-xl mb-6 border border-white/10">
+              <p className="text-gray-500 text-xs font-bold uppercase">Order Number</p>
+              <p className="text-2xl font-black text-white tracking-widest">#{orderId}</p>
+          </div>
           <p className="text-gray-400 mb-8 text-sm">{paymentMethod === 'manual' ? 'We are verifying your transaction ID. You will receive codes via email shortly.' : `Codes sent to ${formData.email}.`}</p>
           <Link to="/" className="inline-block w-full bg-primary hover:bg-primary-hover text-black font-black uppercase py-4 rounded-xl transition-all shadow-glow">Continue Shopping</Link>
         </div>
@@ -114,6 +149,29 @@ export const Cart: React.FC = () => {
                           </div>
                           <input name="email" onChange={handleInputChange} required type="email" placeholder="Email Address" className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" />
                           <input name="phone" onChange={handleInputChange} required type="tel" placeholder="Phone Number" className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" />
+                          
+                          {/* OPTIONAL REGISTRATION FOR GUESTS */}
+                          {!user && (
+                              <div className="pt-4 border-t border-white/5 mt-4">
+                                  <label className="flex items-center gap-3 cursor-pointer group">
+                                      <input type="checkbox" checked={createAccount} onChange={(e) => setCreateAccount(e.target.checked)} className="w-5 h-5 rounded border-white/20 bg-dark-950 checked:bg-primary" />
+                                      <span className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors">Create an account for future orders?</span>
+                                  </label>
+                                  {createAccount && (
+                                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="mt-4">
+                                          <input 
+                                            type="password" 
+                                            placeholder="Create a strong password" 
+                                            required={createAccount}
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none"
+                                          />
+                                          <p className="text-[10px] text-gray-500 mt-2">You will be automatically logged in after purchase.</p>
+                                      </motion.div>
+                                  )}
+                              </div>
+                          )}
                       </div>
                   </div>
                    <div className="bg-dark-900 p-8 rounded-2xl border border-white/10">

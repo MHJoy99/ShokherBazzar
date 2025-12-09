@@ -99,6 +99,7 @@ export const DashboardPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'orders' | 'keys' | 'profile'>('orders');
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
+    const [announcement, setAnnouncement] = useState<{title: string, content: string} | null>(null);
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -107,7 +108,13 @@ export const DashboardPage: React.FC = () => {
             setOrders(data); 
             setLoading(false); 
         };
+        const fetchNotice = async () => {
+            // Admin can create a page with slug 'dashboard-notice' to show messages here
+            const notice = await api.getPage('dashboard-notice');
+            if (notice) setAnnouncement(notice);
+        };
         fetchOrders();
+        fetchNotice();
     }, [user, navigate]);
 
     if (!user) return null;
@@ -115,6 +122,19 @@ export const DashboardPage: React.FC = () => {
     return (
         <div className="min-h-screen pt-32 pb-20 px-4 md:px-8 max-w-7xl mx-auto">
             <Helmet><title>My Dashboard | {config.siteName}</title></Helmet>
+            
+            {announcement && (
+                <div className="bg-blue-900/20 border border-blue-500/30 p-6 rounded-2xl mb-8 flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+                        <i className="fas fa-bullhorn"></i>
+                    </div>
+                    <div>
+                        <h3 className="text-blue-400 font-bold uppercase mb-2">{announcement.title}</h3>
+                        <div className="text-gray-300 text-sm prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: announcement.content }} />
+                    </div>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                 <div className="lg:col-span-1">
                     <div className="bg-dark-900 border border-white/10 rounded-2xl p-6 text-center sticky top-24">
