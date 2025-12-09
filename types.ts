@@ -7,6 +7,13 @@ export interface Variation {
   stock_status: string;
 }
 
+export interface Coupon {
+    id: number;
+    code: string;
+    amount: string;
+    discount_type: 'percent' | 'fixed_cart';
+}
+
 export interface Product {
   id: number;
   name: string;

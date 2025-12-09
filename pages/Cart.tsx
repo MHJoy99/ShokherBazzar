@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { config } from '../config';
 import { useToast } from '../context/ToastContext';
+import { Coupon } from '../types';
 
 export const Cart: React.FC = () => {
   const { items, removeFromCart, updateQuantity, cartTotal, clearCart } = useCart();
@@ -23,6 +24,11 @@ export const Cart: React.FC = () => {
   const [password, setPassword] = useState('');
   const [orderId, setOrderId] = useState<number | null>(null);
   
+  // Coupon State
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [verifyingCoupon, setVerifyingCoupon] = useState(false);
+
   // NEW: Detect return from Payment Gateway
   const [searchParams] = useSearchParams();
 
@@ -45,6 +51,38 @@ export const Cart: React.FC = () => {
       navigator.clipboard.writeText(text);
       showToast("Number Copied!", "success");
   };
+
+  const handleApplyCoupon = async () => {
+      if (!couponCode) return;
+      setVerifyingCoupon(true);
+      try {
+          const coupon = await api.getCoupon(couponCode);
+          if (coupon) {
+              setAppliedCoupon(coupon);
+              showToast("Coupon Applied!", "success");
+          } else {
+              showToast("Invalid Coupon Code", "error");
+              setAppliedCoupon(null);
+          }
+      } catch (e) {
+          showToast("Failed to verify coupon", "error");
+      } finally {
+          setVerifyingCoupon(false);
+      }
+  };
+
+  const calculateDiscount = () => {
+      if (!appliedCoupon) return 0;
+      if (appliedCoupon.discount_type === 'percent') {
+          return cartTotal * (parseFloat(appliedCoupon.amount) / 100);
+      } else {
+          return parseFloat(appliedCoupon.amount);
+      }
+  };
+
+  const discountAmount = calculateDiscount();
+  const finalTotal = Math.max(0, cartTotal - discountAmount);
+  const isFreeOrder = finalTotal === 0;
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,19 +108,24 @@ export const Cart: React.FC = () => {
         const result = await api.createOrder({ 
             items, 
             billing: formData, 
-            payment_method: paymentMethod, 
+            payment_method: isFreeOrder ? 'manual' : paymentMethod, 
             trxId: paymentMethod === 'manual' ? trxId : undefined, 
             senderNumber: paymentMethod === 'manual' ? senderNumber : undefined,
-            customer_id: customerId
+            customer_id: customerId,
+            coupon_code: appliedCoupon?.code
         });
 
         if (result.success) {
             setOrderId(result.id);
-            if (result.payment_url) { 
+            if (isFreeOrder) {
+                // Free order logic
+                clearCart();
+                setStep(3);
+            } else if (result.payment_url) { 
                 // Redirect to Payment Gateway (UddoktaPay via WP)
                 window.location.href = result.payment_url; 
             } else { 
-                // Manual Payment Success
+                // Manual Payment Success (or fallback if no URL)
                 clearCart();
                 setStep(3); 
             }
@@ -115,7 +158,7 @@ export const Cart: React.FC = () => {
               <p className="text-gray-500 text-xs font-bold uppercase">Order Number</p>
               <p className="text-2xl font-black text-white tracking-widest">#{orderId}</p>
           </div>
-          <p className="text-gray-400 mb-8 text-sm">{paymentMethod === 'manual' ? 'We are verifying your transaction ID. You will receive codes via email shortly.' : `Codes sent to ${formData.email}.`}</p>
+          <p className="text-gray-400 mb-8 text-sm">{paymentMethod === 'manual' && !isFreeOrder ? 'We are verifying your transaction ID. You will receive codes via email shortly.' : `Codes sent to ${formData.email}.`}</p>
           <Link to="/" className="inline-block w-full bg-primary hover:bg-primary-hover text-black font-black uppercase py-4 rounded-xl transition-all shadow-glow">Continue Shopping</Link>
         </div>
       </div>
@@ -155,7 +198,48 @@ export const Cart: React.FC = () => {
                 </div>
                 <div className="lg:col-span-1">
                     <div className="bg-dark-900 p-6 rounded-2xl border border-white/10 sticky top-24">
-                        <div className="flex justify-between items-end mb-6"><span className="text-gray-400 text-sm uppercase font-bold">Total Pay</span><span className="text-3xl font-black text-primary">৳{cartTotal.toFixed(0)}</span></div>
+                        {/* COUPON SECTION */}
+                        <div className="mb-6 border-b border-white/5 pb-6">
+                            <p className="text-gray-400 text-xs uppercase font-bold mb-2">Have a Coupon?</p>
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    value={couponCode} 
+                                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                                    placeholder="Enter Code" 
+                                    className="bg-dark-950 border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-full focus:border-primary focus:outline-none" 
+                                />
+                                <button 
+                                    onClick={handleApplyCoupon} 
+                                    disabled={verifyingCoupon}
+                                    className="bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase px-4 rounded-lg transition-colors"
+                                >
+                                    {verifyingCoupon ? '...' : 'Apply'}
+                                </button>
+                            </div>
+                            {appliedCoupon && (
+                                <div className="mt-2 text-green-500 text-xs font-bold flex items-center gap-1">
+                                    <i className="fas fa-check-circle"></i> Applied: {appliedCoupon.code}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-2 mb-6">
+                            <div className="flex justify-between items-center text-gray-400 text-sm">
+                                <span>Subtotal</span>
+                                <span>৳{cartTotal.toFixed(0)}</span>
+                            </div>
+                            {discountAmount > 0 && (
+                                <div className="flex justify-between items-center text-green-500 text-sm font-bold">
+                                    <span>Discount</span>
+                                    <span>-৳{discountAmount.toFixed(0)}</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between items-end pt-4 border-t border-white/5">
+                                <span className="text-white text-sm uppercase font-bold">Total Pay</span>
+                                <span className="text-3xl font-black text-primary">৳{finalTotal.toFixed(0)}</span>
+                            </div>
+                        </div>
                         <button onClick={() => setStep(2)} className="w-full bg-primary hover:bg-primary-hover text-black font-black uppercase italic tracking-wider py-4 rounded-xl shadow-glow transition-all">Checkout</button>
                     </div>
                 </div>
@@ -201,112 +285,115 @@ export const Cart: React.FC = () => {
                           )}
                       </div>
                   </div>
-                   <div className="bg-dark-900 p-8 rounded-2xl border border-white/10">
-                      <h3 className="text-lg font-black text-white uppercase italic mb-6">Select Payment Method</h3>
-                      
-                      <div className="grid grid-cols-2 gap-4 mb-8">
-                          {/* AUTOMATIC PAYMENT CARD */}
-                          <button 
-                            type="button" 
-                            onClick={() => setPaymentMethod('uddoktapay')} 
-                            className={`relative p-5 rounded-xl border-2 transition-all flex flex-col items-center gap-3 group overflow-hidden ${paymentMethod === 'uddoktapay' ? 'bg-primary/10 border-primary shadow-glow-sm' : 'bg-dark-950 border-white/10 hover:border-white/20'}`}
-                          >
-                               {paymentMethod === 'uddoktapay' && <div className="absolute top-2 right-2 text-primary"><i className="fas fa-check-circle"></i></div>}
-                               <div className="flex items-center gap-2 grayscale group-hover:grayscale-0 transition-all opacity-80 group-hover:opacity-100">
-                                   <div className="w-8 h-8 rounded-full bg-pink-600 flex items-center justify-center text-white text-[10px] font-bold">bKash</div>
-                                   <div className="w-8 h-8 rounded-full bg-orange-600 flex items-center justify-center text-white text-[10px] font-bold">Nagad</div>
-                                   <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-[10px] font-bold">Rckt</div>
-                               </div>
-                               <div className="text-center">
-                                   <p className={`font-black uppercase text-sm ${paymentMethod === 'uddoktapay' ? 'text-white' : 'text-gray-400'}`}>Instant Payment</p>
-                                   <p className="text-[10px] text-gray-500">Automated & Secure</p>
-                               </div>
-                          </button>
-
-                          {/* MANUAL PAYMENT CARD */}
-                          <button 
-                            type="button" 
-                            onClick={() => setPaymentMethod('manual')} 
-                            className={`relative p-5 rounded-xl border-2 transition-all flex flex-col items-center gap-3 group ${paymentMethod === 'manual' ? 'bg-white/10 border-white shadow-lg' : 'bg-dark-950 border-white/10 hover:border-white/20'}`}
-                          >
-                               {paymentMethod === 'manual' && <div className="absolute top-2 right-2 text-white"><i className="fas fa-check-circle"></i></div>}
-                               <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg group-hover:scale-110 transition-transform">
-                                   <i className="fas fa-paper-plane"></i>
-                               </div>
-                               <div className="text-center">
-                                   <p className={`font-black uppercase text-sm ${paymentMethod === 'manual' ? 'text-white' : 'text-gray-400'}`}>Send Money</p>
-                                   <p className="text-[10px] text-gray-500">Manual Verification</p>
-                               </div>
-                          </button>
-                      </div>
-
-                      <AnimatePresence mode='wait'>
-                        {paymentMethod === 'uddoktapay' ? (
-                            <motion.div 
-                                key="auto"
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, height: 0 }}
-                                className="p-4 bg-primary/5 border border-primary/20 rounded-xl flex items-center gap-4"
-                            >
-                                <div className="w-12 h-12 bg-dark-950 rounded-lg flex items-center justify-center text-primary text-xl shadow-glow-sm">
-                                    <i className="fas fa-bolt"></i>
-                                </div>
-                                <div>
-                                    <p className="text-white font-bold text-sm">Best Choice</p>
-                                    <p className="text-xs text-gray-400">Payment confirms instantly. No waiting.</p>
-                                </div>
-                            </motion.div>
-                        ) : (
-                            <motion.div 
-                                key="manual"
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, height: 0 }}
-                                className="space-y-4"
-                            >
-                                <div className="p-4 bg-white/5 rounded-xl border border-white/10 text-center">
-                                    <p className="text-sm text-gray-300 mb-4">{config.payment.manualInstructions}</p>
-                                    
-                                    <div className="grid gap-3">
-                                        <div className="flex items-center justify-between bg-dark-950 p-3 rounded-lg border border-pink-500/30 relative overflow-hidden">
-                                            <div className="absolute left-0 top-0 w-1 h-full bg-pink-500"></div>
-                                            <span className="text-pink-500 font-bold text-xs uppercase ml-2">bKash Personal</span>
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-white font-mono font-bold">{config.payment.bkashPersonal}</span>
-                                                <button type="button" onClick={() => copyToClipboard(config.payment.bkashPersonal)} className="text-gray-500 hover:text-white"><i className="fas fa-copy"></i></button>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-between bg-dark-950 p-3 rounded-lg border border-orange-500/30 relative overflow-hidden">
-                                            <div className="absolute left-0 top-0 w-1 h-full bg-orange-500"></div>
-                                            <span className="text-orange-500 font-bold text-xs uppercase ml-2">Nagad Personal</span>
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-white font-mono font-bold">{config.payment.nagadPersonal}</span>
-                                                <button type="button" onClick={() => copyToClipboard(config.payment.nagadPersonal)} className="text-gray-500 hover:text-white"><i className="fas fa-copy"></i></button>
-                                            </div>
-                                        </div>
-                                         <div className="flex items-center justify-between bg-dark-950 p-3 rounded-lg border border-purple-500/30 relative overflow-hidden">
-                                            <div className="absolute left-0 top-0 w-1 h-full bg-purple-500"></div>
-                                            <span className="text-purple-500 font-bold text-xs uppercase ml-2">Rocket Personal</span>
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-white font-mono font-bold">{config.payment.rocketPersonal}</span>
-                                                <button type="button" onClick={() => copyToClipboard(config.payment.rocketPersonal)} className="text-gray-500 hover:text-white"><i className="fas fa-copy"></i></button>
-                                            </div>
-                                        </div>
+                   
+                   {!isFreeOrder && (
+                        <div className="bg-dark-900 p-8 rounded-2xl border border-white/10">
+                            <h3 className="text-lg font-black text-white uppercase italic mb-6">Select Payment Method</h3>
+                            
+                            <div className="grid grid-cols-2 gap-4 mb-8">
+                                {/* AUTOMATIC PAYMENT CARD */}
+                                <button 
+                                    type="button" 
+                                    onClick={() => setPaymentMethod('uddoktapay')} 
+                                    className={`relative p-5 rounded-xl border-2 transition-all flex flex-col items-center gap-3 group overflow-hidden ${paymentMethod === 'uddoktapay' ? 'bg-primary/10 border-primary shadow-glow-sm' : 'bg-dark-950 border-white/10 hover:border-white/20'}`}
+                                >
+                                    {paymentMethod === 'uddoktapay' && <div className="absolute top-2 right-2 text-primary"><i className="fas fa-check-circle"></i></div>}
+                                    <div className="flex items-center gap-2 grayscale group-hover:grayscale-0 transition-all opacity-80 group-hover:opacity-100">
+                                        <div className="w-8 h-8 rounded-full bg-pink-600 flex items-center justify-center text-white text-[10px] font-bold">bKash</div>
+                                        <div className="w-8 h-8 rounded-full bg-orange-600 flex items-center justify-center text-white text-[10px] font-bold">Nagad</div>
+                                        <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-[10px] font-bold">Rckt</div>
                                     </div>
-                                </div>
+                                    <div className="text-center">
+                                        <p className={`font-black uppercase text-sm ${paymentMethod === 'uddoktapay' ? 'text-white' : 'text-gray-400'}`}>Instant Payment</p>
+                                        <p className="text-[10px] text-gray-500">Automated & Secure</p>
+                                    </div>
+                                </button>
 
-                                <div className="space-y-3 pt-4 border-t border-white/5">
-                                    <input type="text" placeholder="Enter Transaction ID (TrxID)" className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-white outline-none font-mono" required={paymentMethod === 'manual'} value={trxId} onChange={(e) => setTrxId(e.target.value)} />
-                                    <input type="text" placeholder="Your Sender Number" className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-white outline-none" required={paymentMethod === 'manual'} value={senderNumber} onChange={(e) => setSenderNumber(e.target.value)} />
-                                </div>
-                            </motion.div>
-                        )}
-                      </AnimatePresence>
+                                {/* MANUAL PAYMENT CARD */}
+                                <button 
+                                    type="button" 
+                                    onClick={() => setPaymentMethod('manual')} 
+                                    className={`relative p-5 rounded-xl border-2 transition-all flex flex-col items-center gap-3 group ${paymentMethod === 'manual' ? 'bg-white/10 border-white shadow-lg' : 'bg-dark-950 border-white/10 hover:border-white/20'}`}
+                                >
+                                    {paymentMethod === 'manual' && <div className="absolute top-2 right-2 text-white"><i className="fas fa-check-circle"></i></div>}
+                                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg group-hover:scale-110 transition-transform">
+                                        <i className="fas fa-paper-plane"></i>
+                                    </div>
+                                    <div className="text-center">
+                                        <p className={`font-black uppercase text-sm ${paymentMethod === 'manual' ? 'text-white' : 'text-gray-400'}`}>Send Money</p>
+                                        <p className="text-[10px] text-gray-500">Manual Verification</p>
+                                    </div>
+                                </button>
+                            </div>
 
-                  </div>
+                            <AnimatePresence mode='wait'>
+                                {paymentMethod === 'uddoktapay' ? (
+                                    <motion.div 
+                                        key="auto"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        className="p-4 bg-primary/5 border border-primary/20 rounded-xl flex items-center gap-4"
+                                    >
+                                        <div className="w-12 h-12 bg-dark-950 rounded-lg flex items-center justify-center text-primary text-xl shadow-glow-sm">
+                                            <i className="fas fa-bolt"></i>
+                                        </div>
+                                        <div>
+                                            <p className="text-white font-bold text-sm">Best Choice</p>
+                                            <p className="text-xs text-gray-400">Payment confirms instantly. No waiting.</p>
+                                        </div>
+                                    </motion.div>
+                                ) : (
+                                    <motion.div 
+                                        key="manual"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        className="space-y-4"
+                                    >
+                                        <div className="p-4 bg-white/5 rounded-xl border border-white/10 text-center">
+                                            <p className="text-sm text-gray-300 mb-4">{config.payment.manualInstructions}</p>
+                                            
+                                            <div className="grid gap-3">
+                                                <div className="flex items-center justify-between bg-dark-950 p-3 rounded-lg border border-pink-500/30 relative overflow-hidden">
+                                                    <div className="absolute left-0 top-0 w-1 h-full bg-pink-500"></div>
+                                                    <span className="text-pink-500 font-bold text-xs uppercase ml-2">bKash Personal</span>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-white font-mono font-bold">{config.payment.bkashPersonal}</span>
+                                                        <button type="button" onClick={() => copyToClipboard(config.payment.bkashPersonal)} className="text-gray-500 hover:text-white"><i className="fas fa-copy"></i></button>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center justify-between bg-dark-950 p-3 rounded-lg border border-orange-500/30 relative overflow-hidden">
+                                                    <div className="absolute left-0 top-0 w-1 h-full bg-orange-500"></div>
+                                                    <span className="text-orange-500 font-bold text-xs uppercase ml-2">Nagad Personal</span>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-white font-mono font-bold">{config.payment.nagadPersonal}</span>
+                                                        <button type="button" onClick={() => copyToClipboard(config.payment.nagadPersonal)} className="text-gray-500 hover:text-white"><i className="fas fa-copy"></i></button>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center justify-between bg-dark-950 p-3 rounded-lg border border-purple-500/30 relative overflow-hidden">
+                                                    <div className="absolute left-0 top-0 w-1 h-full bg-purple-500"></div>
+                                                    <span className="text-purple-500 font-bold text-xs uppercase ml-2">Rocket Personal</span>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-white font-mono font-bold">{config.payment.rocketPersonal}</span>
+                                                        <button type="button" onClick={() => copyToClipboard(config.payment.rocketPersonal)} className="text-gray-500 hover:text-white"><i className="fas fa-copy"></i></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-3 pt-4 border-t border-white/5">
+                                            <input type="text" placeholder="Enter Transaction ID (TrxID)" className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-white outline-none font-mono" required={paymentMethod === 'manual'} value={trxId} onChange={(e) => setTrxId(e.target.value)} />
+                                            <input type="text" placeholder="Your Sender Number" className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-white outline-none" required={paymentMethod === 'manual'} value={senderNumber} onChange={(e) => setSenderNumber(e.target.value)} />
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                   )}
+
                   <button disabled={loading} type="submit" className="w-full bg-green-600 hover:bg-green-500 text-white font-black uppercase italic tracking-wider py-4 rounded-xl shadow-glow transition-all">
-                    {loading ? 'Processing...' : (paymentMethod === 'uddoktapay' ? `Pay ৳${cartTotal.toFixed(0)} Now` : `Verify Payment ৳${cartTotal.toFixed(0)}`)}
+                    {loading ? 'Processing...' : (isFreeOrder ? 'Place Free Order' : (paymentMethod === 'uddoktapay' ? `Pay ৳${finalTotal.toFixed(0)} Now` : `Verify Payment ৳${finalTotal.toFixed(0)}`))}
                   </button>
               </form>
           </div>

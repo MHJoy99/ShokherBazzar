@@ -1,5 +1,5 @@
 
-import { Product, Category, Order, User, OrderNote } from '../types';
+import { Product, Category, Order, User, OrderNote, Coupon } from '../types';
 import { config } from '../config';
 
 // --- MOCK DATA FOR FALLBACK ONLY ---
@@ -138,6 +138,24 @@ export const api = {
       }
   },
 
+  // --- COUPON API ---
+  getCoupon: async (code: string): Promise<Coupon | null> => {
+      try {
+          const coupons = await fetchWooCommerce(`/coupons?code=${code}`);
+          if (coupons.length > 0) {
+              return {
+                  id: coupons[0].id,
+                  code: coupons[0].code,
+                  amount: coupons[0].amount,
+                  discount_type: coupons[0].discount_type
+              };
+          }
+          return null;
+      } catch (e) {
+          return null;
+      }
+  },
+
   // --- REAL ORDER CREATION ---
   createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string }> => {
     console.log("Submitting Order to WooCommerce:", orderData);
@@ -158,6 +176,9 @@ export const api = {
     // For UddoktaPay plugin, the ID is usually 'uddoktapay'
     const payment_method_id = orderData.payment_method === 'manual' ? 'bacs' : 'uddoktapay';
 
+    // Add coupons if present
+    const coupon_lines = orderData.coupon_code ? [{ code: orderData.coupon_code }] : [];
+
     const payload = {
         payment_method: payment_method_id,
         payment_method_title: orderData.payment_method === 'manual' ? 'Manual Transfer (bKash/Nagad)' : 'UddoktaPay (bKash/Nagad/Rocket)',
@@ -175,6 +196,7 @@ export const api = {
             phone: orderData.billing.phone
         },
         line_items: line_items,
+        coupon_lines: coupon_lines,
         meta_data: meta_data,
         customer_note: orderData.payment_method === 'manual' 
             ? `TrxID: ${orderData.trxId}, Sender: ${orderData.senderNumber}` 
@@ -183,20 +205,21 @@ export const api = {
 
     try {
         const order = await fetchWooCommerce('/orders', 'POST', payload);
-        
+        console.log("Order Created:", order);
+
         let payment_url = null;
         
-        // 1. Priority: Check if the plugin explicitly returned a redirect URL in the order meta or response
-        if (order.payment_url) {
-            payment_url = order.payment_url;
+        // 1. Priority: Check for explicit Redirect URL in various known locations
+        if (order.payment_result && order.payment_result.redirect_url) {
+             payment_url = order.payment_result.redirect_url;
         } 
-        else if (order.payment_result && order.payment_result.redirect_url) {
-            payment_url = order.payment_result.redirect_url;
+        else if (order.payment_url) {
+             payment_url = order.payment_url;
         }
-        // 2. Fallback: For standard WooCommerce gateways, redirect to the "Order Pay" endpoint
-        else if (payment_method_id === 'uddoktapay') {
-             // This standard endpoint usually forces the gateway to initialize
-             payment_url = `https://admin.mhjoygamershub.com/checkout/order-pay/${order.id}/?pay_for_order=true&key=${order.order_key}`;
+        else if (order.meta_data) {
+             // Sometimes plugins hide it in meta_data
+             const payMeta = order.meta_data.find((m: any) => m.key === '_payment_url' || m.key === 'payment_url');
+             if (payMeta) payment_url = payMeta.value;
         }
 
         return { 
