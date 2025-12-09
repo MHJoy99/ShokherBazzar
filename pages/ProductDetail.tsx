@@ -9,53 +9,81 @@ import { useToast } from '../context/ToastContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { config } from '../config';
+import { SkeletonCard } from '../components/Skeleton';
 
 export const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [product, setProduct] = useState<Product | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [suggestedProducts, setSuggestedProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  // Loading States
+  const [loadingMain, setLoadingMain] = useState(true);
+  const [loadingRelated, setLoadingRelated] = useState(true);
+
   const [selectedVariation, setSelectedVariation] = useState<Variation | null>(null);
   const [qty, setQty] = useState(1);
   const [activeTab, setActiveTab] = useState<'desc' | 'redeem' | 'specs'>('desc');
   const { addToCart } = useCart();
-  const { showToast } = useToast();
 
   useEffect(() => {
-    const fetchProduct = async () => {
-      setLoading(true);
+    const fetchProductData = async () => {
+      if (!id) return;
+      
+      // 1. FAST LOAD: Reset states and scroll up
+      setLoadingMain(true);
+      setLoadingRelated(true);
+      setProduct(null);
+      setRelatedProducts([]);
+      setSuggestedProducts([]);
       window.scrollTo(0, 0);
-      if (id) {
-        const data = await api.getProduct(parseInt(id));
-        setProduct(data || null);
-        if (data?.variations && data.variations.length > 0) setSelectedVariation(data.variations[0]);
-        
-        // Dynamic Related Products Fetching
-        if (data) {
-            // 1. Sidebar ("Related Cards"): Use Cross-sells if available, else Category logic
-            if (data.cross_sell_ids && data.cross_sell_ids.length > 0) {
-                 const crossSells = await api.getProductsByIds(data.cross_sell_ids);
-                 setRelatedProducts(crossSells);
-            } else if (data.categories.length > 0) {
-                 const all = await api.getProducts(data.categories[0].slug);
-                 setRelatedProducts(all.filter(p => p.id !== data.id).slice(0, 8));
-            }
 
-            // 2. Bottom Grid ("You Might Also Like"): Use broad category suggestions
-            const suggestions = await api.getProducts('all'); 
-            const filteredSuggestions = suggestions
-                .filter(p => p.id !== data.id && !data.cross_sell_ids.includes(p.id))
-                .slice(0, 4);
-            setSuggestedProducts(filteredSuggestions);
-        }
-        setLoading(false);
+      // 2. MAIN FETCH: Get only the product details first
+      const data = await api.getProduct(parseInt(id));
+      setProduct(data || null);
+      if (data?.variations && data.variations.length > 0) setSelectedVariation(data.variations[0]);
+      
+      // 3. UNBLOCK UI: Stop loading immediately so user sees the page
+      setLoadingMain(false);
+
+      // 4. BACKGROUND FETCH: Get extra data (Related/Suggested) without blocking the user
+      if (data) {
+            try {
+                // A. Related Cards (Sidebar)
+                let related: Product[] = [];
+                if (data.cross_sell_ids && data.cross_sell_ids.length > 0) {
+                     related = await api.getProductsByIds(data.cross_sell_ids);
+                } else if (data.categories.length > 0) {
+                     // Optimization: Fetch fewer items
+                     const categorySlug = data.categories[0].slug;
+                     const allInCat = await api.getProducts(categorySlug); 
+                     related = allInCat.filter(p => p.id !== data.id).slice(0, 8);
+                }
+                setRelatedProducts(related);
+
+                // B. Suggested Products (Bottom)
+                // Optimization: Instead of fetching 'all', fetch a different category or just use the remaining items from above
+                // For now, we reuse the category fetch to avoid a massive DB call, or fetch 'gift-cards' as generic backup
+                let suggestions = related.length > 4 ? related.slice(4, 8) : [];
+                
+                if (suggestions.length < 4) {
+                    const generic = await api.getProducts('all'); // This might still be cached by browser
+                    suggestions = generic
+                        .filter(p => p.id !== data.id && !related.find(r => r.id === p.id))
+                        .slice(0, 4);
+                }
+                setSuggestedProducts(suggestions);
+            } catch (e) {
+                console.warn("Background fetch failed", e);
+            } finally {
+                setLoadingRelated(false);
+            }
       }
     };
-    fetchProduct();
+    fetchProductData();
   }, [id]);
 
-  if (loading) return <div className="min-h-screen bg-dark-950 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary shadow-glow"></div></div>;
+  if (loadingMain) return <div className="min-h-screen bg-dark-950 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary shadow-glow"></div></div>;
   if (!product) return <div className="min-h-screen flex items-center justify-center text-white">Product not found</div>;
 
   const isVariable = product.variations && product.variations.length > 0;
@@ -194,7 +222,6 @@ export const ProductDetail: React.FC = () => {
                       <div className="w-16 h-16 bg-primary/20 text-primary rounded-xl flex items-center justify-center text-3xl"><i className="fas fa-check-circle"></i></div>
                       <div>
                           <h3 className="text-white font-bold text-lg uppercase">{editionName}</h3>
-                          {/* Removed Hardcoded "Digital License / Code" */}
                       </div>
                       <div className="ml-auto text-right">
                           <div className="text-sm text-gray-500 line-through">৳{product.regular_price}</div>
@@ -299,17 +326,24 @@ export const ProductDetail: React.FC = () => {
                 </div>
 
                 {/* RELATED CARDS (SIDEBAR LIST) */}
-                {relatedProducts.length > 0 && (
-                    <div className="bg-dark-900 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
-                        <div className="bg-dark-950 p-4 border-b border-white/5 flex justify-between items-center">
-                            <h4 className="text-white font-bold text-xs uppercase tracking-wider">Related Cards</h4>
-                            <Link to={`/category/${product.categories[0]?.slug}`} className="text-[10px] text-primary font-bold uppercase hover:underline">View All</Link>
+                <div className="bg-dark-900 border border-white/5 rounded-2xl overflow-hidden shadow-xl min-h-[100px]">
+                    <div className="bg-dark-950 p-4 border-b border-white/5 flex justify-between items-center">
+                        <h4 className="text-white font-bold text-xs uppercase tracking-wider">Related Cards</h4>
+                        {product.categories[0] && (
+                            <Link to={`/category/${product.categories[0].slug}`} className="text-[10px] text-primary font-bold uppercase hover:underline">View All</Link>
+                        )}
+                    </div>
+                    
+                    {loadingRelated ? (
+                        <div className="p-4 space-y-4">
+                            {[1,2,3].map(i => <div key={i} className="h-12 bg-white/5 rounded animate-pulse"></div>)}
                         </div>
+                    ) : relatedProducts.length > 0 ? (
                         <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
                             {relatedProducts.map(p => (
                                 <Link to={`/product/${p.id}`} key={p.id} className="flex items-center gap-3 p-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 group">
                                     <div className="w-10 h-10 rounded overflow-hidden bg-dark-950 border border-white/10 shrink-0">
-                                         <img src={p.images[0].src} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt="" />
+                                            <img src={p.images[0].src} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt="" />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <h5 className="text-white text-xs font-bold truncate group-hover:text-primary transition-colors">{p.name}</h5>
@@ -324,8 +358,10 @@ export const ProductDetail: React.FC = () => {
                                 </Link>
                             ))}
                         </div>
-                    </div>
-                )}
+                    ) : (
+                        <div className="p-4 text-center text-gray-500 text-xs">No related items.</div>
+                    )}
+                </div>
 
              </div>
           </div>
@@ -333,14 +369,21 @@ export const ProductDetail: React.FC = () => {
         </div>
 
         {/* SUGGESTED PRODUCTS (BOTTOM GRID) */}
-        {suggestedProducts.length > 0 && (
-            <div className="mt-24 border-t border-white/5 pt-12">
-                <div className="flex items-center justify-between mb-8">
-                    <h2 className="text-2xl font-black text-white uppercase italic tracking-wide">You Might Also Like</h2>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">{suggestedProducts.map(p => (<ProductCard key={p.id} product={p} />))}</div>
+        <div className="mt-24 border-t border-white/5 pt-12">
+            <div className="flex items-center justify-between mb-8">
+                <h2 className="text-2xl font-black text-white uppercase italic tracking-wide">You Might Also Like</h2>
             </div>
-        )}
+            
+            {loadingRelated ? (
+                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                     {[1,2,3,4].map(i => <SkeletonCard key={i} />)}
+                 </div>
+            ) : suggestedProducts.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">{suggestedProducts.map(p => (<ProductCard key={p.id} product={p} />))}</div>
+            ) : (
+                <p className="text-gray-500">No suggestions available.</p>
+            )}
+        </div>
       </div>
       
       {/* MOBILE STICKY FOOTER */}

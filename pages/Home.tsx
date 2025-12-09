@@ -135,7 +135,7 @@ export const Home: React.FC = () => {
                  ))}
              </div>
         ) : (
-            Object.entries(productsByCategory).map(([categoryName, products], index) => {
+            Object.entries(productsByCategory).map(([categoryName, products]: [string, Product[]], index) => {
             const catObj = categories.find(c => c.name === categoryName);
             const slug = catObj ? catObj.slug : categoryName.toLowerCase().replace(/\s+/g, '-');
             return (
@@ -254,3 +254,4 @@ export const Home: React.FC = () => {
     </div>
   );
 };
+    

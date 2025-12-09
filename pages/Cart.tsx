@@ -40,7 +40,7 @@ export const Cart: React.FC = () => {
                     first_name: formData.first_name,
                     last_name: formData.last_name
                 });
-                customerId = newUser?.id; // API returns the new user object but context might not update immediately in this scope
+                customerId = newUser?.id;
              } catch (regError) {
                  alert("Account creation failed. Email might be in use. Proceeding as guest.");
              }
@@ -58,7 +58,13 @@ export const Cart: React.FC = () => {
         if (result.success) {
             clearCart();
             setOrderId(result.id);
-            if (result.payment_url) { window.location.href = result.payment_url; } else { setStep(3); }
+            if (result.payment_url) { 
+                // Redirect to Payment Gateway (UddoktaPay via WP)
+                window.location.href = result.payment_url; 
+            } else { 
+                // Manual Payment Success
+                setStep(3); 
+            }
         }
     } catch (error) { alert("Order failed. Please try again."); } finally { setLoading(false); }
   };

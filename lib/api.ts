@@ -10,10 +10,11 @@ export const MOCK_CATEGORIES: Category[] = [
 
 export const MOCK_PRODUCTS: Product[] = []; // Empty default, relies on API
 
-const WC_BASE_URL = "https://bazaar.mhjoybots.store/wp-json/wc/v3";
-const WP_BASE_URL = "https://bazaar.mhjoybots.store/wp-json/wp/v2";
+// UPDATED BACKEND DOMAINS
+const WC_BASE_URL = "https://admin.mhjoygamershub.com/wp-json/wc/v3";
+const WP_BASE_URL = "https://admin.mhjoygamershub.com/wp-json/wp/v2";
 
-// NOTE: Ideally these should be in environment variables
+// NOTE: Generate new keys in WooCommerce > Settings > Advanced > REST API on your new site
 const CONSUMER_KEY = "ck_1096fe3ae14606686ad5d403e48a521260a1d98f";
 const CONSUMER_SECRET = "cs_bbf7f67357551485a2f7a09e87eb0477a7019a3f";
 
@@ -153,9 +154,13 @@ export const api = {
         meta_data.push({ key: 'sender_number', value: orderData.senderNumber });
     }
 
+    // Payment Method ID must match what is defined in WooCommerce Settings
+    // For UddoktaPay plugin, the ID is usually 'uddoktapay'
+    const payment_method_id = orderData.payment_method === 'manual' ? 'bacs' : 'uddoktapay';
+
     const payload = {
-        payment_method: orderData.payment_method === 'manual' ? 'bacs' : 'uddoktapay',
-        payment_method_title: orderData.payment_method === 'manual' ? 'Manual Transfer (bKash/Nagad)' : 'Online Payment',
+        payment_method: payment_method_id,
+        payment_method_title: orderData.payment_method === 'manual' ? 'Manual Transfer (bKash/Nagad)' : 'UddoktaPay (bKash/Nagad/Rocket)',
         set_paid: false,
         customer_id: orderData.customer_id || 0, // Link order to user if logged in
         billing: {
@@ -173,15 +178,29 @@ export const api = {
         meta_data: meta_data,
         customer_note: orderData.payment_method === 'manual' 
             ? `TrxID: ${orderData.trxId}, Sender: ${orderData.senderNumber}` 
-            : "Customer waiting for payment link"
+            : "Customer proceeding to payment gateway..."
     };
 
     try {
         const order = await fetchWooCommerce('/orders', 'POST', payload);
+        
+        let payment_url = null;
+        
+        // 1. Check if the standard API returned a payment URL (WooCommerce sometimes does this)
+        if (order.payment_url) {
+            payment_url = order.payment_url;
+        } 
+        // 2. Fallback: For UddoktaPay, usually we need to go to the "Pay for Order" page
+        // Format: /checkout/order-pay/:order_id?pay_for_order=true&key=:order_key
+        else if (payment_method_id === 'uddoktapay') {
+             // Redirect to the WP checkout 'pay' endpoint on the NEW domain
+             payment_url = `https://admin.mhjoygamershub.com/checkout/order-pay/${order.id}/?pay_for_order=true&key=${order.order_key}`;
+        }
+
         return { 
             id: order.id, 
             success: true,
-            payment_url: order.payment_url || null
+            payment_url: payment_url
         };
     } catch (error) {
         console.error("Order Creation Failed:", error);
@@ -193,10 +212,7 @@ export const api = {
   sendMessage: async (formData: any): Promise<boolean> => {
       try {
           // We use the custom endpoint created in functions.php
-          // Note: We access the root WP REST API, not the /wp/v2/ or /wc/v3/ namespaces directly for custom routes usually
-          // But our fetchWordPress helper appends /wp/v2. We need a raw fetch here to hit /custom/v1
-          
-          const response = await fetch('https://bazaar.mhjoybots.store/wp-json/custom/v1/contact', {
+          const response = await fetch('https://admin.mhjoygamershub.com/wp-json/custom/v1/contact', {
               method: 'POST',
               headers: {
                   'Content-Type': 'application/json'
