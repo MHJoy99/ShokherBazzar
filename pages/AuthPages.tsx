@@ -8,31 +8,86 @@ import { Helmet } from 'react-helmet-async';
 import { config } from '../config';
 
 export const LoginPage: React.FC = () => {
-    const { login } = useAuth();
+    const { login, register } = useAuth();
     const navigate = useNavigate();
+    const [isRegistering, setIsRegistering] = useState(false);
+    
+    // Login State
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    
+    // Register State
+    const [regData, setRegData] = useState({ email: '', password: '', first_name: '', last_name: '' });
+    
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState('');
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
-        await login(email);
-        setIsSubmitting(false);
-        navigate('/dashboard');
+        setError('');
+        try {
+            await login(email);
+            navigate('/dashboard');
+        } catch (err: any) {
+            setError("Login failed. Check your email or try registering.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleRegister = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        setError('');
+        try {
+            await register(regData);
+            navigate('/dashboard');
+        } catch (err: any) {
+            setError(err.message || "Registration failed. Email might be taken.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center pt-20 pb-20 px-4">
+        <div className="min-h-screen flex items-center justify-center pt-32 pb-20 px-4">
             <div className="bg-dark-900 border border-white/10 p-8 rounded-2xl w-full max-w-md shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-purple-600"></div>
-                <div className="text-center mb-8"><h2 className="text-3xl font-black text-white uppercase italic">Welcome Back</h2><p className="text-gray-400 text-sm mt-2">Access your digital vault.</p></div>
-                <form onSubmit={handleLogin} className="space-y-6">
-                    <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Email Address</label><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" placeholder="user@example.com" /></div>
-                    <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Password</label><input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" placeholder="••••••••" /></div>
-                    <button disabled={isSubmitting} type="submit" className="w-full bg-primary hover:bg-cyan-400 text-black font-black uppercase py-4 rounded-xl shadow-glow transition-all">{isSubmitting ? 'Accessing Vault...' : 'Login'}</button>
-                </form>
-                <div className="mt-6 text-center"><p className="text-xs text-gray-500">Don't have an account? <span className="text-primary cursor-pointer hover:underline">Register</span></p></div>
+                <div className="text-center mb-8">
+                    <h2 className="text-3xl font-black text-white uppercase italic">{isRegistering ? 'Create Account' : 'Welcome Back'}</h2>
+                    <p className="text-gray-400 text-sm mt-2">{isRegistering ? 'Join the community.' : 'Access your digital vault.'}</p>
+                </div>
+                
+                {error && <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded mb-4 text-xs font-bold text-center">{error}</div>}
+
+                {isRegistering ? (
+                    <form onSubmit={handleRegister} className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                             <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">First Name</label><input type="text" required value={regData.first_name} onChange={(e) => setRegData({...regData, first_name: e.target.value})} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" /></div>
+                             <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Last Name</label><input type="text" required value={regData.last_name} onChange={(e) => setRegData({...regData, last_name: e.target.value})} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" /></div>
+                        </div>
+                        <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Email</label><input type="email" required value={regData.email} onChange={(e) => setRegData({...regData, email: e.target.value})} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" /></div>
+                        <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Password</label><input type="password" required value={regData.password} onChange={(e) => setRegData({...regData, password: e.target.value})} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" /></div>
+                        <button disabled={isSubmitting} type="submit" className="w-full bg-primary hover:bg-cyan-400 text-black font-black uppercase py-4 rounded-xl shadow-glow transition-all">{isSubmitting ? 'Creating...' : 'Register'}</button>
+                    </form>
+                ) : (
+                    <form onSubmit={handleLogin} className="space-y-6">
+                        <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Email Address</label><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" placeholder="user@example.com" /></div>
+                        <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Password</label><input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" placeholder="••••••••" /></div>
+                        <div className="bg-yellow-500/10 border border-yellow-500/20 p-2 rounded text-[10px] text-yellow-500">Note: Password check requires JWT Plugin. Currently checking email only.</div>
+                        <button disabled={isSubmitting} type="submit" className="w-full bg-primary hover:bg-cyan-400 text-black font-black uppercase py-4 rounded-xl shadow-glow transition-all">{isSubmitting ? 'Accessing Vault...' : 'Login'}</button>
+                    </form>
+                )}
+                
+                <div className="mt-6 text-center">
+                    <p className="text-xs text-gray-500">
+                        {isRegistering ? "Already have an account?" : "Don't have an account?"} 
+                        <span onClick={() => setIsRegistering(!isRegistering)} className="text-primary cursor-pointer hover:underline ml-1 font-bold">
+                            {isRegistering ? 'Login' : 'Register'}
+                        </span>
+                    </p>
+                </div>
             </div>
         </div>
     );
@@ -47,7 +102,11 @@ export const DashboardPage: React.FC = () => {
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
-        const fetchOrders = async () => { const data = await api.getUserOrders(user.id); setOrders(data); setLoading(false); };
+        const fetchOrders = async () => { 
+            const data = await api.getUserOrders(user.id); 
+            setOrders(data); 
+            setLoading(false); 
+        };
         fetchOrders();
     }, [user, navigate]);
 
@@ -76,10 +135,12 @@ export const DashboardPage: React.FC = () => {
                         <div className="space-y-6">
                             {activeTab === 'orders' && orders.map(order => (
                                 <div key={order.id} className="bg-dark-900 border border-white/5 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 hover:border-white/20 transition-colors">
-                                    <div className="flex items-center gap-4"><div className="w-12 h-12 bg-dark-950 rounded flex items-center justify-center text-gray-500 border border-white/10 font-mono text-xs">#{order.id}</div><div><p className="text-white font-bold text-sm">{order.line_items[0].name} {order.line_items.length > 1 && `+ ${order.line_items.length - 1} more`}</p><p className="text-gray-500 text-xs">{order.date_created}</p></div></div>
+                                    <div className="flex items-center gap-4"><div className="w-12 h-12 bg-dark-950 rounded flex items-center justify-center text-gray-500 border border-white/10 font-mono text-xs">#{order.id}</div><div><p className="text-white font-bold text-sm">{order.line_items[0]?.name || 'Unknown Item'} {order.line_items.length > 1 && `+ ${order.line_items.length - 1} more`}</p><p className="text-gray-500 text-xs">{order.date_created}</p></div></div>
                                     <div className="text-right"><p className="text-primary font-bold">৳{order.total}</p><span className="inline-block px-2 py-1 bg-green-500/10 text-green-500 text-[10px] font-bold uppercase rounded mt-1 border border-green-500/20">{order.status}</span></div>
                                 </div>
                             ))}
+                            {activeTab === 'orders' && orders.length === 0 && <p className="text-gray-500 text-center py-10">No orders found.</p>}
+                            
                             {activeTab === 'keys' && (
                                 <div className="grid grid-cols-1 gap-6">
                                     {orders.flatMap(o => o.line_items).filter(item => item.license_key).map((item, idx) => (
@@ -91,7 +152,7 @@ export const DashboardPage: React.FC = () => {
                                     {orders.every(o => !o.line_items.some(i => i.license_key)) && <p className="text-gray-500 text-center py-10">No active licenses found.</p>}
                                 </div>
                             )}
-                            {activeTab === 'profile' && (<div className="bg-dark-900 p-8 rounded-xl border border-white/10 text-center"><p className="text-gray-400">Profile editing is disabled in this demo.</p></div>)}
+                            {activeTab === 'profile' && (<div className="bg-dark-900 p-8 rounded-xl border border-white/10 text-center"><p className="text-gray-400">Profile editing is disabled in this version.</p></div>)}
                         </div>
                     )}
                 </div>

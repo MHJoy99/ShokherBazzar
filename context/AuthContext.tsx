@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 interface AuthContextType {
     user: User | null;
     login: (email: string) => Promise<void>;
+    register: (data: any) => Promise<void>;
     logout: () => void;
     isLoading: boolean;
 }
@@ -25,10 +26,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
+    const register = async (data: any) => {
+        setIsLoading(true);
+        try {
+            const userData = await api.register(data);
+            setUser(userData);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const logout = () => setUser(null);
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+        <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>
             {children}
         </AuthContext.Provider>
     );
