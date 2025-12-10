@@ -70,38 +70,6 @@ const mapWooProduct = (p: any): Product => ({
   featured: p.featured || false
 });
 
-const findPaymentUrl = (order: any): string | null => {
-    let url = null;
-    
-    // 1. Search Meta Data for External Gateway URL
-    // We look for _api_payment_url (Our Custom Fix) OR standard keys
-    if (order.meta_data && Array.isArray(order.meta_data)) {
-        const externalLinkMeta = order.meta_data.find((m: any) => 
-            m.key === '_api_payment_url' || // Priority: Our custom PHP hook
-            (typeof m.value === 'string' && m.value.includes('pay.mhjoygamershub.com')) || 
-            m.key === 'uddoktapay_payment_url' ||
-            m.key === '_payment_url'
-        );
-        if (externalLinkMeta) {
-            url = externalLinkMeta.value;
-        }
-    }
-
-    // 2. Check payment_result (Standard WooCommerce)
-    if (!url && order.payment_result && order.payment_result.redirect_url) {
-         url = order.payment_result.redirect_url;
-    } 
-    
-    // 3. Fallback: Standard payment_url (Ignore admin links if possible)
-    if (!url && order.payment_url) {
-         if (!order.payment_url.includes('order-pay')) {
-             url = order.payment_url;
-         }
-    }
-    
-    return url;
-};
-
 export const api = {
   getProducts: async (category?: string): Promise<Product[]> => {
     try {
@@ -229,26 +197,39 @@ export const api = {
     };
 
     try {
-        let order = await fetchWooCommerce('/orders', 'POST', payload);
+        const order = await fetchWooCommerce('/orders', 'POST', payload);
         console.log("Order Created:", order);
 
-        // ATTEMPT 1: Check for URL immediately
-        let payment_url = findPaymentUrl(order);
+        let payment_url = null;
 
-        // ATTEMPT 2: If missing and using UddoktaPay, wait 1.5s and fetch again
-        // This is crucial because the PHP hook we added might take a moment to save the meta data
-        if (!payment_url && orderData.payment_method === 'uddoktapay') {
-             console.log("Payment URL not found initially. Retrying fetch to catch PHP hook result...");
-             await new Promise(r => setTimeout(r, 1500));
-             order = await fetchWooCommerce(`/orders/${order.id}`);
-             payment_url = findPaymentUrl(order);
-             console.log("Retry Result URL:", payment_url);
+        // NEW STRATEGY: Direct API Call to Custom Endpoint
+        // If we want automatic payment, we ask our custom WordPress endpoint to generate the link directly
+        // This bypasses the plugin's "Checkout Page" logic and prevents redirection loops.
+        if (orderData.payment_method === 'uddoktapay') {
+            try {
+                console.log("Fetching Direct Payment URL...");
+                const directPayResponse = await fetch('https://admin.mhjoygamershub.com/wp-json/custom/v1/get-payment-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ order_id: order.id })
+                });
+
+                if (directPayResponse.ok) {
+                    const directData = await directPayResponse.json();
+                    if (directData.payment_url) {
+                        console.log("Direct URL Found:", directData.payment_url);
+                        payment_url = directData.payment_url;
+                    }
+                }
+            } catch (directErr) {
+                console.error("Direct Payment URL Fetch Failed", directErr);
+            }
         }
 
         return { 
             id: order.id, 
             success: true,
-            payment_url: payment_url || undefined,
+            payment_url: payment_url || undefined, // Prioritize the direct URL
             debug_meta: order.meta_data, 
             debug_payment_result: order.payment_result 
         };
