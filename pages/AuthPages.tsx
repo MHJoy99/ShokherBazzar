@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -263,9 +264,17 @@ export const DashboardPage: React.FC = () => {
     // Profile Edit State
     const [profileData, setProfileData] = useState({ first_name: '', last_name: '', password: '' });
     const [savingProfile, setSavingProfile] = useState(false);
-    
-    // Toggle for Debug Info
-    const [showDebug, setShowDebug] = useState(false);
+
+    // SYNC USER DATA ON MOUNT
+    useEffect(() => {
+        if(user) {
+            api.getProfileSync(user.email).then(freshUser => {
+                if(freshUser && JSON.stringify(freshUser) !== JSON.stringify(user)) {
+                    // Sync logic if needed
+                }
+            });
+        }
+    }, []);
 
     const fetchOrders = useCallback(async () => {
         if(!user) return;
@@ -274,10 +283,8 @@ export const DashboardPage: React.FC = () => {
             const data = await api.getUserOrders(user.id);
             setOrders(data);
         } catch(e) {
-            console.error(e);
-            // On error, orders stays empty or whatever it was
             setOrders([]);
-            showToast("Connection issue: Could not fetch orders.", "error");
+            showToast("Could not fetch orders.", "error");
         } finally {
             setLoading(false);
         }
@@ -299,7 +306,7 @@ export const DashboardPage: React.FC = () => {
         try {
             const success = await updateUserProfile(profileData);
             if (success) {
-                showToast("Profile updated! Re-login if you changed password.");
+                showToast("Profile updated!");
                 if (profileData.password) logout();
             } else {
                 showToast("Update failed", "error");
@@ -368,13 +375,13 @@ export const DashboardPage: React.FC = () => {
                                 </div>
                             )}
                             
-                            {/* DIGITAL VAULT WITH ORDER ID BADGES */}
+                            {/* DIGITAL VAULT */}
                             {activeTab === 'keys' && (
                                 <div className="grid grid-cols-1 gap-6">
                                     {orders.map(order => (
                                         order.line_items.filter(item => item.license_key).map((item, idx) => {
                                             const keyStr = item.license_key || '';
-                                            const isEncrypted = keyStr.startsWith('def50') || keyStr.length > 50; // Heuristic for long/garbage strings
+                                            const isEncrypted = keyStr.startsWith('def50'); 
                                             
                                             return (
                                                 <div key={`${order.id}-${idx}`} className="bg-gradient-to-r from-dark-900 to-dark-950 border border-primary/30 p-6 rounded-xl relative overflow-hidden group">
@@ -394,24 +401,13 @@ export const DashboardPage: React.FC = () => {
                                                                 <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
                                                                     <div className="flex items-center gap-2 mb-2">
                                                                         <i className="fas fa-exclamation-triangle text-red-500 animate-pulse"></i>
-                                                                        <span className="text-red-400 font-bold text-xs uppercase tracking-wider">Pending Decryption</span>
+                                                                        <span className="text-red-400 font-bold text-xs uppercase tracking-wider">Processing Encryption</span>
                                                                     </div>
                                                                     <p className="text-gray-400 text-[11px] leading-relaxed mb-3">
-                                                                        The system is processing your key. If it doesn't appear correctly, please contact support.
+                                                                        Your key is securely stored but waiting for decryption. Please wait or contact support.
                                                                     </p>
-                                                                    
-                                                                    {showDebug ? (
-                                                                         <div className="bg-black/50 rounded p-2 border border-white/5 relative mb-3">
-                                                                             <code className="block text-[10px] text-red-400/80 font-mono break-all whitespace-normal bg-transparent">
-                                                                                 {keyStr}
-                                                                             </code>
-                                                                         </div>
-                                                                    ) : (
-                                                                        <button onClick={() => setShowDebug(true)} className="text-[10px] text-gray-500 hover:text-white underline mb-3">Show Debug Info</button>
-                                                                    )}
-
                                                                     <a 
-                                                                        href={`mailto:${config.contact.email}?subject=Decryption Error Order #${order.id}&body=My license key is showing as encrypted for Order #${order.id}.%0D%0A%0D%0AKey start: ${keyStr.substring(0, 20)}...`}
+                                                                        href={`mailto:${config.contact.email}?subject=Decryption Error Order #${order.id}&body=My license key is showing as encrypted for Order #${order.id}.`}
                                                                         className="inline-block bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-bold px-3 py-2 rounded transition-colors"
                                                                     >
                                                                         <i className="fas fa-envelope mr-2"></i> Report Issue
@@ -425,7 +421,7 @@ export const DashboardPage: React.FC = () => {
                                                                     <button 
                                                                         onClick={() => { 
                                                                             navigator.clipboard.writeText(item.license_key || ''); 
-                                                                            showToast("Copied to clipboard!", "success");
+                                                                            showToast("Copied!", "success");
                                                                         }} 
                                                                         className="text-gray-400 hover:text-white transition-colors p-2 bg-white/5 rounded-lg hover:bg-white/10 shrink-0"
                                                                     >
@@ -443,6 +439,7 @@ export const DashboardPage: React.FC = () => {
                                         <div className="text-center py-12 bg-dark-900/50 rounded-xl border border-white/5">
                                             <i className="fas fa-key text-4xl text-gray-600 mb-4"></i>
                                             <p className="text-gray-400 font-bold">No active licenses found.</p>
+                                            <p className="text-[10px] text-gray-500 mt-2">Licenses usually appear after order status is 'Completed'.</p>
                                         </div>
                                     )}
                                 </div>

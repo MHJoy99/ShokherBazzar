@@ -160,6 +160,8 @@ export const api = {
         line_items,
         coupon_lines,
         meta_data,
+        trxId: orderData.trxId, // Pass explicitly for PHP handler
+        senderNumber: orderData.senderNumber, // Pass explicitly for PHP handler
         customer_note: orderData.payment_method === 'manual' ? `TrxID: ${orderData.trxId}` : "Headless Order"
     };
 
@@ -294,16 +296,21 @@ export const api = {
       } catch (e) { return false; }
   },
 
-  // NEW: Fetch Fresh Profile
+  // NEW: Fetch Fresh Profile (User Sync)
+  getProfileSync: async (email: string): Promise<User | null> => {
+      try {
+          const response = await fetch(`${CUSTOM_API_URL}/get-profile`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email })
+          });
+          if (!response.ok) return null;
+          return response.json();
+      } catch (e) { return null; }
+  },
+
   getProfile: async (email: string): Promise<User | null> => {
-      // In a real OAuth system, we would use a token. 
-      // Here we will reuse the login endpoint but just to refresh data if we have credentials, 
-      // or ideally we need a /me endpoint. 
-      // For now, since we don't have a /me endpoint in WP without plugins, we will skip auto-refresh
-      // and rely on what we have, OR re-login silently if needed.
-      // Actually, we can just return null and rely on the AuthContext's local state for now
-      // to keep it simple as per request.
-      return null;
+     return api.getProfileSync(email);
   },
 
   getUserOrders: async (userId: number): Promise<Order[]> => {
