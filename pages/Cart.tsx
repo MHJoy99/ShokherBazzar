@@ -46,8 +46,14 @@ export const Cart: React.FC = () => {
           setOrderId(finalId);
           setStep(3);
           clearCart();
-          // NOTE: We rely on the backend webhook to update status now. 
-          // We don't call verifyPayment explicitly to avoid connection errors if endpoint is missing.
+          
+          // TRIGGER VERIFICATION: Tell WordPress to check UddoktaPay immediately
+          if (finalId > 0) {
+              api.verifyPayment(finalId).then((verified) => {
+                  if (verified) showToast("Payment Verified Successfully!", "success");
+                  else showToast("Payment Pending Verification", "info");
+              });
+          }
       }
   }, [searchParams, clearCart]);
 
@@ -130,7 +136,7 @@ export const Cart: React.FC = () => {
                 clearCart();
                 setStep(3);
             } else if (result.payment_url) { 
-                // Redirect to WordPress Checkout (Standard Flow)
+                // Redirect to Payment Gateway (Direct)
                 window.location.href = result.payment_url; 
             } else { 
                 if (paymentMethod === 'uddoktapay') {
@@ -160,16 +166,16 @@ export const Cart: React.FC = () => {
   if (step === 3) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
-        <Helmet><title>Order Confirmed | {config.siteName}</title></Helmet>
+        <Helmet><title>Order Completed | {config.siteName}</title></Helmet>
         <div className="bg-dark-900 p-8 rounded-2xl border border-primary/20 max-w-lg w-full text-center shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-primary shadow-glow"></div>
           <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/20"><i className="fas fa-check text-4xl text-primary"></i></div>
-          <h2 className="text-3xl font-black text-white mb-2 uppercase italic">Order Placed!</h2>
+          <h2 className="text-3xl font-black text-white mb-2 uppercase italic">Order Completed!</h2>
           <div className="bg-dark-950 p-4 rounded-xl mb-6 border border-white/10">
               <p className="text-gray-500 text-xs font-bold uppercase">Order Number</p>
               <p className="text-2xl font-black text-white tracking-widest">#{orderId}</p>
           </div>
-          <p className="text-gray-400 mb-8 text-sm">{paymentMethod === 'manual' && !isFreeOrder ? 'We are verifying your transaction ID. You will receive codes via email shortly.' : `Codes sent to ${formData.email}.`}</p>
+          <p className="text-gray-400 mb-8 text-sm">{paymentMethod === 'manual' && !isFreeOrder ? 'We are verifying your transaction ID. You will receive codes via email shortly.' : `Thank you! Your payment is verified. Check your email for codes.`}</p>
           <Link to="/" className="inline-block w-full bg-primary hover:bg-primary-hover text-black font-black uppercase py-4 rounded-xl transition-all shadow-glow">Continue Shopping</Link>
         </div>
       </div>
