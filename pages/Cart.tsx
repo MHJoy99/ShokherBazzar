@@ -38,7 +38,7 @@ export const Cart: React.FC = () => {
   useEffect(() => {
       const status = searchParams.get('status');
       const oid = searchParams.get('order_id');
-      const invoice = searchParams.get('invoice_id'); // Some gateways return this
+      const invoice = searchParams.get('invoice_id'); 
       
       // Accept 'success' OR 'completed' as valid status
       if ((status === 'success' || status === 'completed') && (oid || invoice)) {
@@ -46,11 +46,8 @@ export const Cart: React.FC = () => {
           setOrderId(finalId);
           setStep(3);
           clearCart();
-          
-          // Trigger Backend Verification Immediately
-          if(finalId > 0) {
-              api.verifyPayment(finalId);
-          }
+          // NOTE: We rely on the backend webhook to update status now. 
+          // We don't call verifyPayment explicitly to avoid connection errors if endpoint is missing.
       }
   }, [searchParams, clearCart]);
 
@@ -130,19 +127,15 @@ export const Cart: React.FC = () => {
         if (result.success) {
             setOrderId(result.id);
             if (isFreeOrder) {
-                // Free order logic
                 clearCart();
                 setStep(3);
             } else if (result.payment_url) { 
-                // Redirect to Payment Gateway (UddoktaPay via WP)
+                // Redirect to WordPress Checkout (Standard Flow)
                 window.location.href = result.payment_url; 
             } else { 
-                // Manual Payment Success OR Failed to find URL for Automatic
                 if (paymentMethod === 'uddoktapay') {
-                    // If automatic failed to get link, show friendly error and offer manual
                     setPaymentError(true);
                 } else {
-                    // Manual Payment
                     clearCart();
                     setStep(3); 
                 }
