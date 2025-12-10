@@ -45,11 +45,21 @@ export const Footer: React.FC = () => (
                <h4 className="text-white font-bold uppercase tracking-widest mb-6 border-l-2 border-primary pl-3">Secure Payment</h4>
                <p className="text-xs text-gray-500 mb-4">We accept 100% secure local payments.</p>
                <div className="grid grid-cols-3 gap-2">
-                   <div className="bg-pink-600 rounded p-2 flex items-center justify-center h-10" title="bKash"><span className="font-bold text-white text-[10px]">bKash</span></div>
-                   <div className="bg-orange-600 rounded p-2 flex items-center justify-center h-10" title="Nagad"><span className="font-bold text-white text-[10px]">Nagad</span></div>
-                   <div className="bg-purple-600 rounded p-2 flex items-center justify-center h-10" title="Rocket"><span className="font-bold text-white text-[10px]">Rocket</span></div>
-                   <div className="bg-blue-800 rounded p-2 flex items-center justify-center h-10" title="Visa"><i className="fab fa-cc-visa text-white text-lg"></i></div>
-                   <div className="bg-red-800 rounded p-2 flex items-center justify-center h-10" title="Mastercard"><i className="fab fa-cc-mastercard text-white text-lg"></i></div>
+                   <div className="bg-white rounded p-1 flex items-center justify-center h-10 overflow-hidden shadow-sm" title="bKash">
+                       <img src="https://raw.githubusercontent.com/shipu/bkash-example/master/bkash_payment_logo.png" alt="bKash" className="h-full object-contain" />
+                   </div>
+                   <div className="bg-white rounded p-1 flex items-center justify-center h-10 overflow-hidden shadow-sm" title="Nagad">
+                       <img src="https://freepnglogo.com/images/all_img/1701511252nagad-logo-transparent.png" alt="Nagad" className="h-full object-contain" />
+                   </div>
+                   <div className="bg-white rounded p-1 flex items-center justify-center h-10 overflow-hidden shadow-sm" title="Rocket">
+                       <img src="https://seeklogo.com/images/D/dutch-bangla-rocket-logo-B4D1CC458D-seeklogo.com.png" alt="Rocket" className="h-full object-contain" />
+                   </div>
+                   <div className="bg-white rounded p-1 flex items-center justify-center h-10 overflow-hidden shadow-sm" title="Visa">
+                       <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Visa_Inc._logo.svg/2560px-Visa_Inc._logo.svg.png" alt="Visa" className="h-full object-contain" />
+                   </div>
+                   <div className="bg-white rounded p-1 flex items-center justify-center h-10 overflow-hidden shadow-sm" title="Mastercard">
+                       <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard_Logo.svg/1280px-Mastercard_Logo.svg.png" alt="Mastercard" className="h-full object-contain" />
+                   </div>
                </div>
             </div>
          </div>

@@ -358,9 +358,15 @@ export const Cart: React.FC = () => {
                                 >
                                     {paymentMethod === 'uddoktapay' && <div className="absolute top-2 right-2 text-primary"><i className="fas fa-check-circle"></i></div>}
                                     <div className="flex items-center gap-2 grayscale group-hover:grayscale-0 transition-all opacity-80 group-hover:opacity-100">
-                                        <div className="w-8 h-8 rounded-full bg-pink-600 p-1"><img src="https://raw.githubusercontent.com/shipu/bkash-example/master/bkash_payment_logo.png" className="w-full h-full object-contain" alt="" /></div>
-                                        <div className="w-8 h-8 rounded-full bg-orange-600 p-1"><img src="https://freepnglogo.com/images/all_img/1701511252nagad-logo-transparent.png" className="w-full h-full object-contain" alt="" /></div>
-                                        <div className="w-8 h-8 rounded-full bg-purple-600 p-1"></div>
+                                        <div className="w-10 h-10 rounded-full bg-white p-1 shadow-sm overflow-hidden flex items-center justify-center">
+                                            <img src="https://raw.githubusercontent.com/shipu/bkash-example/master/bkash_payment_logo.png" className="h-full object-contain" alt="bKash" />
+                                        </div>
+                                        <div className="w-10 h-10 rounded-full bg-white p-1 shadow-sm overflow-hidden flex items-center justify-center">
+                                            <img src="https://freepnglogo.com/images/all_img/1701511252nagad-logo-transparent.png" className="h-full object-contain" alt="Nagad" />
+                                        </div>
+                                        <div className="w-10 h-10 rounded-full bg-white p-1 shadow-sm overflow-hidden flex items-center justify-center">
+                                            <img src="https://seeklogo.com/images/D/dutch-bangla-rocket-logo-B4D1CC458D-seeklogo.com.png" className="h-full object-contain" alt="Rocket" />
+                                        </div>
                                     </div>
                                     <span className="text-xs font-bold text-white uppercase">{config.payment.methodTitle}</span>
                                     <span className="text-[10px] text-green-500">Automated • Instant</span>
@@ -388,19 +394,34 @@ export const Cart: React.FC = () => {
                                             <div className="space-y-3 mb-6">
                                                 {config.payment.bkashPersonal && (
                                                     <div className="flex justify-between items-center bg-dark-900 p-3 rounded border border-white/5">
-                                                        <div className="flex items-center gap-3"><div className="w-6 h-6 rounded-full bg-pink-600"></div><span className="text-white font-bold text-sm">bKash Personal</span></div>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full bg-white p-1 shadow-sm overflow-hidden flex items-center justify-center">
+                                                                <img src="https://raw.githubusercontent.com/shipu/bkash-example/master/bkash_payment_logo.png" className="h-full object-contain" alt="bKash" />
+                                                            </div>
+                                                            <span className="text-white font-bold text-sm">bKash Personal</span>
+                                                        </div>
                                                         <div className="flex items-center gap-3"><span className="font-mono text-gray-300">{config.payment.bkashPersonal}</span><button type="button" onClick={() => copyToClipboard(config.payment.bkashPersonal)} className="text-primary hover:text-white"><i className="fas fa-copy"></i></button></div>
                                                     </div>
                                                 )}
                                                 {config.payment.nagadPersonal && (
                                                     <div className="flex justify-between items-center bg-dark-900 p-3 rounded border border-white/5">
-                                                        <div className="flex items-center gap-3"><div className="w-6 h-6 rounded-full bg-orange-600"></div><span className="text-white font-bold text-sm">Nagad Personal</span></div>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full bg-white p-1 shadow-sm overflow-hidden flex items-center justify-center">
+                                                                <img src="https://freepnglogo.com/images/all_img/1701511252nagad-logo-transparent.png" className="h-full object-contain" alt="Nagad" />
+                                                            </div>
+                                                            <span className="text-white font-bold text-sm">Nagad Personal</span>
+                                                        </div>
                                                         <div className="flex items-center gap-3"><span className="font-mono text-gray-300">{config.payment.nagadPersonal}</span><button type="button" onClick={() => copyToClipboard(config.payment.nagadPersonal)} className="text-primary hover:text-white"><i className="fas fa-copy"></i></button></div>
                                                     </div>
                                                 )}
                                                 {config.payment.rocketPersonal && config.payment.rocketPersonal !== "0000-000000" && (
                                                     <div className="flex justify-between items-center bg-dark-900 p-3 rounded border border-white/5">
-                                                        <div className="flex items-center gap-3"><div className="w-6 h-6 rounded-full bg-purple-600"></div><span className="text-white font-bold text-sm">Rocket Personal</span></div>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full bg-white p-1 shadow-sm overflow-hidden flex items-center justify-center">
+                                                                <img src="https://seeklogo.com/images/D/dutch-bangla-rocket-logo-B4D1CC458D-seeklogo.com.png" className="h-full object-contain" alt="Rocket" />
+                                                            </div>
+                                                            <span className="text-white font-bold text-sm">Rocket Personal</span>
+                                                        </div>
                                                         <div className="flex items-center gap-3"><span className="font-mono text-gray-300">{config.payment.rocketPersonal}</span><button type="button" onClick={() => copyToClipboard(config.payment.rocketPersonal)} className="text-primary hover:text-white"><i className="fas fa-copy"></i></button></div>
                                                     </div>
                                                 )}

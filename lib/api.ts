@@ -12,6 +12,9 @@ const env = (import.meta as any).env;
 const CONSUMER_KEY = env?.VITE_WC_CONSUMER_KEY || "ck_97520f17fc4470d40b9625ea0cf0911c5a0ce9bb";
 const CONSUMER_SECRET = env?.VITE_WC_CONSUMER_SECRET || "cs_ad555ccecf6ebc4d1c84a3e14d74b53dd55de903";
 
+// Branded Placeholder for missing images
+const PLACEHOLDER_IMG = "https://placehold.co/400x600/0f172a/06b6d4/png?text=MHJoy+GamersHub";
+
 const getAuthHeaders = () => {
     const auth = btoa(`${CONSUMER_KEY}:${CONSUMER_SECRET}`);
     return { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' };
@@ -47,7 +50,9 @@ const mapWooProduct = (p: any): Product => ({
   on_sale: p.on_sale,
   short_description: p.short_description?.replace(/<[^>]*>?/gm, '') || "",
   description: p.description || "",
-  images: p.images.map((img: any) => ({ id: img.id, src: img.src, alt: img.alt || p.name })),
+  images: (p.images && p.images.length > 0) 
+    ? p.images.map((img: any) => ({ id: img.id, src: img.src, alt: img.alt || p.name }))
+    : [{ id: 0, src: PLACEHOLDER_IMG, alt: p.name }],
   categories: p.categories.map((c: any) => ({ id: c.id, name: c.name, slug: c.slug })),
   tags: p.tags ? p.tags.map((t: any) => ({ id: t.id, name: t.name, slug: t.slug })) : [],
   cross_sell_ids: p.cross_sell_ids || [],
@@ -331,7 +336,7 @@ export const api = {
                   name: i.name,
                   quantity: i.quantity,
                   license_key: i.license_keys && i.license_keys.length > 0 ? i.license_keys.join(' | ') : null,
-                  image: i.image,
+                  image: i.image || PLACEHOLDER_IMG, // Use fallback
                   downloads: [],
               }))
           }));
@@ -368,7 +373,7 @@ export const api = {
                   name: i.name,
                   quantity: i.quantity,
                   license_key: i.license_keys && i.license_keys.length > 0 ? i.license_keys.join(' | ') : null,
-                  image: i.image,
+                  image: i.image || PLACEHOLDER_IMG, // Use fallback
                   downloads: [],
               }))
           };

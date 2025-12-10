@@ -6,8 +6,13 @@ export const ScrollToTop = () => {
   const { pathname } = useLocation();
 
   useLayoutEffect(() => {
-    document.documentElement.scrollTo({ top: 0, left: 0, behavior: "instant" });
-    document.body.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    // Force immediate scroll to top logic for all browsers
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    } catch (e) {
+      // Fallback for older browsers
+      window.scrollTo(0, 0);
+    }
   }, [pathname]);
 
   return null;
