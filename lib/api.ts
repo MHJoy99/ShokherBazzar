@@ -206,15 +206,17 @@ export const api = {
     }
   },
 
-  // TRIGGER BACKEND STATUS UPDATE (Silent)
+  // TRIGGER BACKEND STATUS UPDATE (Silent & Robust)
   verifyPayment: async (orderId: number): Promise<boolean> => {
       try {
-          await fetch(`${CUSTOM_API_URL}/verify-payment`, {
+          const res = await fetch(`${CUSTOM_API_URL}/verify-payment`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ order_id: orderId })
           });
-          return true;
+          // If 404 (endpoint missing on server), ignore it.
+          if (res.status === 404) return false;
+          return res.ok;
       } catch (e) {
           // Fail silently to avoid interrupting UI
           return false;
@@ -312,3 +314,4 @@ export const api = {
       } catch (e) { return []; }
   }
 };
+    
