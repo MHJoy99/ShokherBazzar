@@ -29,8 +29,8 @@ export const Cart: React.FC = () => {
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [verifyingCoupon, setVerifyingCoupon] = useState(false);
 
-  // DEBUG STATE
-  const [debugData, setDebugData] = useState<any>(null);
+  // ERROR MODAL STATE
+  const [paymentError, setPaymentError] = useState(false);
 
   // NEW: Detect return from Payment Gateway
   const [searchParams] = useSearchParams();
@@ -90,7 +90,7 @@ export const Cart: React.FC = () => {
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setDebugData(null); // Reset debug data
+    setPaymentError(false);
     try {
         let customerId = user?.id;
 
@@ -131,13 +131,8 @@ export const Cart: React.FC = () => {
             } else { 
                 // Manual Payment Success OR Failed to find URL for Automatic
                 if (paymentMethod === 'uddoktapay') {
-                    // !!! DEBUG MODE !!!
-                    // Automatic Payment selected but no URL found. Show debug info.
-                    setDebugData({
-                        id: result.id,
-                        meta_data: result.debug_meta,
-                        payment_result: result.debug_payment_result
-                    });
+                    // If automatic failed to get link, show friendly error and offer manual
+                    setPaymentError(true);
                 } else {
                     // Manual Payment
                     clearCart();
@@ -184,36 +179,22 @@ export const Cart: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 min-h-screen">
       <Helmet><title>Checkout | {config.siteName}</title></Helmet>
       
-      {/* DEBUG MODAL */}
-      {debugData && (
+      {/* ERROR MODAL FOR FAILED GATEWAY */}
+      {paymentError && (
            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-               <div className="bg-dark-900 border-2 border-red-500 rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6 shadow-2xl relative">
-                   <div className="flex items-center gap-4 mb-4 text-red-500">
-                        <i className="fas fa-bug text-3xl"></i>
-                        <div>
-                            <h2 className="text-xl font-black uppercase">Payment Link Missing</h2>
-                            <p className="text-xs text-gray-400 uppercase font-bold">Requires Admin Action</p>
-                        </div>
+               <div className="bg-dark-900 border-2 border-orange-500 rounded-2xl w-full max-w-md p-8 shadow-2xl relative text-center">
+                   <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-orange-500 text-3xl">
+                       <i className="fas fa-exclamation-triangle"></i>
                    </div>
-                   <p className="text-gray-300 mb-4 text-sm">
-                       The order was created (<b>#{debugData.id}</b>), but the website couldn't find the UddoktaPay link.
+                   <h2 className="text-xl font-black uppercase text-white mb-2">Gateway Busy</h2>
+                   <p className="text-gray-400 mb-6 text-sm">
+                       The automatic payment gateway is taking too long to respond. Don't worry, your order <b>#{orderId}</b> is created!
                        <br/><br/>
-                       <span className="text-white font-bold">Reason:</span> The Payment Plugin did not generate the link automatically via API.
-                       <br/><br/>
-                       <span className="text-green-400 font-bold">Solution:</span> You MUST add the PHP code provided by the developer to your WordPress `functions.php`. Once added, this error will disappear.
+                       Please use <b>Manual Send Money</b> instead.
                    </p>
-
-                   <div className="mt-6 flex justify-end gap-4">
-                       <button onClick={() => { 
-                           // Fallback manual check
-                           if(window.confirm("Did you fix the PHP code? Try fetching URL again?")) {
-                               alert("Retrying... (In a real app, this would re-fetch order)");
-                           } else {
-                               clearCart(); setStep(3); 
-                           }
-                       }} className="px-6 py-2 rounded-lg bg-red-500 text-white font-bold uppercase text-xs">Retry</button>
-                       <button onClick={() => { clearCart(); setStep(3); }} className="px-6 py-2 rounded-lg border border-white/10 text-gray-400 hover:text-white font-bold uppercase text-xs">I'll Fix It Later (Close)</button>
-                   </div>
+                   <button onClick={() => { setPaymentMethod('manual'); setPaymentError(false); }} className="w-full bg-primary text-black font-bold uppercase py-3 rounded-xl shadow-glow">
+                       Switch to Manual Payment
+                   </button>
                </div>
            </div>
        )}

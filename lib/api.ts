@@ -8,7 +8,7 @@ export const MOCK_CATEGORIES: Category[] = [
   { id: 6, name: 'Gift Cards', slug: 'gift-cards', count: 15 },
 ];
 
-export const MOCK_PRODUCTS: Product[] = []; // Empty default, relies on API
+export const MOCK_PRODUCTS: Product[] = []; 
 
 // UPDATED BACKEND DOMAINS
 const WC_BASE_URL = "https://admin.mhjoygamershub.com/wp-json/wc/v3";
@@ -38,7 +38,6 @@ const fetchWooCommerce = async (endpoint: string, method = 'GET', body?: any) =>
 };
 
 const fetchWordPress = async (endpoint: string) => {
-    // WP API usually doesn't need Basic Auth for reading public pages, but we send it just in case
     const response = await fetch(`${WP_BASE_URL}${endpoint}`, { headers: getAuthHeaders() });
     if (!response.ok) throw new Error("WP API Error");
     return response.json();
@@ -80,7 +79,7 @@ export const api = {
       }
       return products;
     } catch (error) {
-      console.warn("API Error, Mock Data fallback blocked for production safety.");
+      // Fail silently in production
       return [];
     }
   },
@@ -98,7 +97,7 @@ export const api = {
                  regular_price: v.regular_price,
                  stock_status: v.stock_status
              }));
-          } catch (vErr) { console.warn("Failed to fetch variations", vErr); }
+          } catch (vErr) { }
       }
       return product;
     } catch (error) {
@@ -154,9 +153,8 @@ export const api = {
       }
   },
 
-  createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string; debug_meta?: any; debug_payment_result?: any }> => {
-    console.log("Submitting Order to WooCommerce:", orderData);
-
+  createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string }> => {
+    
     const line_items = orderData.items.map((item: any) => ({
         product_id: item.id,
         quantity: item.quantity,
@@ -198,16 +196,11 @@ export const api = {
 
     try {
         const order = await fetchWooCommerce('/orders', 'POST', payload);
-        console.log("Order Created:", order);
-
         let payment_url = null;
 
-        // NEW STRATEGY: Direct API Call to Custom Endpoint
-        // If we want automatic payment, we ask our custom WordPress endpoint to generate the link directly
-        // This bypasses the plugin's "Checkout Page" logic and prevents redirection loops.
+        // DIRECT API CALL TO WORDPRESS BRIDGE
         if (orderData.payment_method === 'uddoktapay') {
             try {
-                console.log("Fetching Direct Payment URL...");
                 const directPayResponse = await fetch('https://admin.mhjoygamershub.com/wp-json/custom/v1/get-payment-url', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -217,24 +210,20 @@ export const api = {
                 if (directPayResponse.ok) {
                     const directData = await directPayResponse.json();
                     if (directData.payment_url) {
-                        console.log("Direct URL Found:", directData.payment_url);
                         payment_url = directData.payment_url;
                     }
                 }
             } catch (directErr) {
-                console.error("Direct Payment URL Fetch Failed", directErr);
+                console.error("Payment Gateway Connection Error");
             }
         }
 
         return { 
             id: order.id, 
             success: true,
-            payment_url: payment_url || undefined, // Prioritize the direct URL
-            debug_meta: order.meta_data, 
-            debug_payment_result: order.payment_result 
+            payment_url: payment_url || undefined
         };
     } catch (error) {
-        console.error("Order Creation Failed:", error);
         throw error;
     }
   },
@@ -249,7 +238,6 @@ export const api = {
           if (!response.ok) throw new Error('Failed to send message');
           return true;
       } catch (error) {
-          console.error("Contact Form Error:", error);
           throw error;
       }
   },
@@ -271,7 +259,6 @@ export const api = {
               avatar_url: response.avatar_url
           };
       } catch (error) {
-          console.error("Registration Error", error);
           throw error;
       }
   },
