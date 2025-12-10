@@ -209,17 +209,35 @@ export const api = {
 
         let payment_url = null;
         
-        // 1. Priority: Check for explicit Redirect URL in various known locations
-        if (order.payment_result && order.payment_result.redirect_url) {
-             payment_url = order.payment_result.redirect_url;
-        } 
-        else if (order.payment_url) {
-             payment_url = order.payment_url;
+        // --- IMPROVED PAYMENT URL FINDER ---
+        
+        // 1. Search Meta Data for External Gateway URL (UddoktaPay usually puts it here)
+        // We look for any value that contains your payment domain 'pay.mhjoygamershub.com'
+        if (order.meta_data && Array.isArray(order.meta_data)) {
+            const externalLinkMeta = order.meta_data.find((m: any) => 
+                (typeof m.value === 'string' && m.value.includes('pay.mhjoygamershub.com')) || 
+                m.key === 'uddoktapay_payment_url' ||
+                m.key === '_payment_url'
+            );
+            if (externalLinkMeta) {
+                payment_url = externalLinkMeta.value;
+                console.log("Found Gateway URL in Meta:", payment_url);
+            }
         }
-        else if (order.meta_data) {
-             // Sometimes plugins hide it in meta_data
-             const payMeta = order.meta_data.find((m: any) => m.key === '_payment_url' || m.key === 'payment_url');
-             if (payMeta) payment_url = payMeta.value;
+
+        // 2. Check payment_result (Standard WooCommerce)
+        if (!payment_url && order.payment_result && order.payment_result.redirect_url) {
+             payment_url = order.payment_result.redirect_url;
+             console.log("Found Redirect URL in Payment Result:", payment_url);
+        } 
+        
+        // 3. Fallback: Standard payment_url (Only use if it is NOT the admin checkout link)
+        if (!payment_url && order.payment_url) {
+             if (!order.payment_url.includes('order-pay')) {
+                 payment_url = order.payment_url;
+             } else {
+                 console.warn("Ignoring internal WP Admin payment link:", order.payment_url);
+             }
         }
 
         return { 
