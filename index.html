@@ -38,114 +38,111 @@
               'neon': '0 0 5px #06b6d4, 0 0 10px #06b6d4',
             },
             backgroundImage: {
-              'cyber-grid': "url('https://grainy-gradients.vercel.app/noise.svg'), linear-gradient(to bottom, transparent, #020617 90%), repeating-linear-gradient(0deg, transparent, transparent 49px, rgba(6, 182, 212, 0.05) 50px), repeating-linear-gradient(90deg, transparent, transparent 49px, rgba(6, 182, 212, 0.05) 50px)",
+              'cyber-grid': "url('https://grainy-gradients.vercel.app/noise.svg')"
+            },
+            animation: {
+              'float': 'float 6s ease-in-out infinite',
+              'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'fade-in-up': 'fadeInUp 0.5s ease-out forwards',
+            },
+            keyframes: {
+              float: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-20px)' },
+              },
+              fadeInUp: {
+                '0%': { opacity: '0', transform: 'translateY(20px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              }
             }
-          },
-        },
+          }
+        }
       }
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-      body {
-        font-family: 'Inter', sans-serif;
-        background-color: #020617; /* dark-950 */
-        color: #f8fafc;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-        /* PERFORMANCE FIX: Removed background-attachment: fixed */
-      }
-      
-      /* FIXED BACKGROUND LAYER FOR PERFORMANCE */
-      .fixed-bg {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        z-index: -1;
-        pointer-events: none;
-        background-image: 
-          radial-gradient(circle at 50% 0%, rgba(6, 182, 212, 0.15) 0%, transparent 50%),
-          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-        background-size: 100% 100%, 40px 40px, 40px 40px;
-      }
+    
+    <!-- FONT AWESOME -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    
+    <!-- FONTS -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
 
-      h1, h2, h3, h4, h5, h6 {
-        font-family: 'Rajdhani', sans-serif;
-      }
-      
-      /* Glassmorphism Utilities */
-      .glass {
-        background: rgba(15, 23, 42, 0.85); /* Increased opacity for mobile perf */
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-      }
-      
-      .glass-card {
-        background: rgba(30, 41, 59, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-      }
+    <style type="text/tailwindcss">
+      @layer components {
+        .glass {
+          @apply bg-dark-950/80 backdrop-blur-md;
+        }
+        .text-glow {
+          text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            @apply bg-dark-950;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            @apply bg-dark-700 rounded-full;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            @apply bg-primary;
+        }
 
-      /* Custom Scrollbar */
-      ::-webkit-scrollbar {
-        width: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #020617;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #06b6d4;
-      }
-
-      /* Text Gradient */
-      .text-gradient {
-        background: linear-gradient(to right, #06b6d4, #6366f1);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-      }
-      
-      /* Smooth transitions for all interactive elements */
-      a, button {
-        transition-property: all;
-        transition-duration: 200ms;
-      }
-      
-      /* Animation Utilities */
-      @keyframes float {
-        0% { transform: translateY(0px); }
-        50% { transform: translateY(-10px); }
-        100% { transform: translateY(0px); }
-      }
-      .animate-float {
-        animation: float 6s ease-in-out infinite;
+        /* PROSE CUSTOM FOR STATIC PAGES */
+        .prose-custom {
+            @apply text-gray-400 leading-relaxed;
+        }
+        .prose-custom h1 {
+            @apply text-3xl font-black text-white uppercase italic mb-6;
+        }
+        .prose-custom h2 {
+            @apply text-xl font-bold text-white mt-10 mb-4 flex items-center gap-2 border-b border-white/5 pb-2 uppercase tracking-wide;
+        }
+        .prose-custom h3 {
+            @apply text-lg font-bold text-gray-200 mt-6 mb-2;
+        }
+        .prose-custom p {
+            @apply mb-4 text-sm md:text-base;
+        }
+        .prose-custom ul {
+            @apply list-disc list-inside space-y-2 mb-6 ml-2;
+        }
+        .prose-custom ol {
+            @apply list-decimal list-inside space-y-2 mb-6 ml-2;
+        }
+        .prose-custom li {
+            @apply text-gray-400 text-sm md:text-base;
+        }
+        .prose-custom li strong {
+            @apply text-white;
+        }
+        .prose-custom a {
+            @apply text-primary hover:underline font-bold;
+        }
+        .important-box {
+            @apply bg-blue-500/5 border-l-4 border-blue-500 p-6 rounded-r-lg my-8 text-sm text-gray-300 shadow-lg;
+        }
+        .warning-box {
+            @apply bg-red-500/5 border-l-4 border-red-500 p-6 rounded-r-lg my-8 text-sm text-gray-300 shadow-lg;
+        }
       }
     </style>
   <script type="importmap">
 {
   "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "react/": "https://aistudiocdn.com/react@^19.2.1/",
-    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.10.1",
-    "react-helmet-async": "https://aistudiocdn.com/react-helmet-async@^2.0.5",
-    "framer-motion": "https://aistudiocdn.com/framer-motion@^12.23.25",
-    "vite": "https://aistudiocdn.com/vite@^7.2.7",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.2"
+    "react/": "https://esm.sh/react@^19.2.1/",
+    "react": "https://esm.sh/react@^19.2.1",
+    "vite": "https://esm.sh/vite@^7.2.7",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
+    "framer-motion": "https://esm.sh/framer-motion@^12.23.26",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.10.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "react-helmet-async": "https://esm.sh/react-helmet-async@^2.0.5"
   }
 }
 </script>
 </head>
-  <body>
-    <div class="fixed-bg"></div>
+  <body class="bg-dark-950 text-white antialiased overflow-x-hidden">
     <div id="root"></div>
-    <!-- CRITICAL: This line tells Vite where your React code lives -->
-    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
