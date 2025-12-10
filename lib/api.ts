@@ -72,6 +72,7 @@ const mapWooProduct = (p: any): Product => ({
 export const api = {
   getProducts: async (category?: string): Promise<Product[]> => {
     try {
+      // Direct Fetch - No Caching as requested
       const data = await fetchWooCommerce('/products?per_page=50');
       let products = data.map(mapWooProduct);
       if (category && category !== 'all') {
@@ -79,7 +80,6 @@ export const api = {
       }
       return products;
     } catch (error) {
-      // Fail silently in production
       return [];
     }
   },
@@ -91,13 +91,21 @@ export const api = {
           try {
              // INCREASED LIMIT TO 100 TO FIX MISSING VARIATIONS
              const variationsData = await fetchWooCommerce(`/products/${id}/variations?per_page=100`);
+             
              product.variations = variationsData.map((v: any) => ({
                  id: v.id,
                  name: v.attributes.map((a: any) => a.option).join(' ') || `Option ${v.id}`,
-                 price: v.price,
+                 price: v.price || v.regular_price || "0", // Fallback to 0 if empty
                  regular_price: v.regular_price,
                  stock_status: v.stock_status
-             }));
+             })).sort((a: any, b: any) => {
+                 // ROBUST SORTING: LOW TO HIGH
+                 // We parse Float to ensure 100 comes after 50 (string sort would put 100 before 50)
+                 const priceA = parseFloat(a.price);
+                 const priceB = parseFloat(b.price);
+                 return priceA - priceB;
+             });
+             
           } catch (vErr) { }
       }
       return product;
