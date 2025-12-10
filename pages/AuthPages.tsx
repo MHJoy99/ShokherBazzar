@@ -6,11 +6,12 @@ import { api } from '../lib/api';
 import { Order, OrderNote } from '../types';
 import { Helmet } from 'react-helmet-async';
 import { config } from '../config';
+import { useToast } from '../context/ToastContext';
 
 export const LoginPage: React.FC = () => {
     const { login, register } = useAuth();
     const navigate = useNavigate();
-    const [isRegistering, setIsRegistering] = useState(false);
+    const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
     
     // Login State
     const [email, setEmail] = useState('');
@@ -21,6 +22,7 @@ export const LoginPage: React.FC = () => {
     
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
+    const [successMsg, setSuccessMsg] = useState('');
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -50,18 +52,38 @@ export const LoginPage: React.FC = () => {
         }
     };
 
+    const handleReset = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        setError('');
+        setSuccessMsg('');
+        try {
+            await api.resetPassword(email);
+            setSuccessMsg("Check your email for a new password.");
+        } catch (err: any) {
+            setError("Could not reset password. Email not found.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     return (
         <div className="min-h-screen flex items-center justify-center pt-32 pb-20 px-4">
             <div className="bg-dark-900 border border-white/10 p-8 rounded-2xl w-full max-w-md shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-purple-600"></div>
                 <div className="text-center mb-8">
-                    <h2 className="text-3xl font-black text-white uppercase italic">{isRegistering ? 'Create Account' : 'Welcome Back'}</h2>
-                    <p className="text-gray-400 text-sm mt-2">{isRegistering ? 'Join the community.' : 'Access your digital vault.'}</p>
+                    <h2 className="text-3xl font-black text-white uppercase italic">
+                        {mode === 'login' ? 'Welcome Back' : mode === 'register' ? 'Create Account' : 'Reset Password'}
+                    </h2>
+                    <p className="text-gray-400 text-sm mt-2">
+                        {mode === 'login' ? 'Access your digital vault.' : mode === 'register' ? 'Join the community.' : 'We will help you get back in.'}
+                    </p>
                 </div>
                 
                 {error && <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded mb-4 text-xs font-bold text-center">{error}</div>}
+                {successMsg && <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded mb-4 text-xs font-bold text-center">{successMsg}</div>}
 
-                {isRegistering ? (
+                {mode === 'register' && (
                     <form onSubmit={handleRegister} className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                              <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">First Name</label><input type="text" required value={regData.first_name} onChange={(e) => setRegData({...regData, first_name: e.target.value})} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" /></div>
@@ -71,20 +93,35 @@ export const LoginPage: React.FC = () => {
                         <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Password</label><input type="password" required value={regData.password} onChange={(e) => setRegData({...regData, password: e.target.value})} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" /></div>
                         <button disabled={isSubmitting} type="submit" className="w-full bg-primary hover:bg-cyan-400 text-black font-black uppercase py-4 rounded-xl shadow-glow transition-all">{isSubmitting ? 'Creating...' : 'Register'}</button>
                     </form>
-                ) : (
+                )}
+                
+                {mode === 'login' && (
                     <form onSubmit={handleLogin} className="space-y-6">
                         <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Email Address</label><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" placeholder="user@example.com" /></div>
-                        <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Password</label><input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" placeholder="••••••••" /></div>
+                        <div>
+                            <div className="flex justify-between mb-2">
+                                <label className="block text-xs font-bold uppercase text-gray-500">Password</label>
+                                <span onClick={() => setMode('forgot')} className="text-xs text-primary cursor-pointer hover:underline">Forgot?</span>
+                            </div>
+                            <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" placeholder="••••••••" />
+                        </div>
                         
                         <button disabled={isSubmitting} type="submit" className="w-full bg-primary hover:bg-cyan-400 text-black font-black uppercase py-4 rounded-xl shadow-glow transition-all">{isSubmitting ? 'Accessing Vault...' : 'Login'}</button>
+                    </form>
+                )}
+
+                {mode === 'forgot' && (
+                    <form onSubmit={handleReset} className="space-y-6">
+                        <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Enter your Email</label><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" placeholder="user@example.com" /></div>
+                        <button disabled={isSubmitting} type="submit" className="w-full bg-primary hover:bg-cyan-400 text-black font-black uppercase py-4 rounded-xl shadow-glow transition-all">{isSubmitting ? 'Sending...' : 'Send New Password'}</button>
                     </form>
                 )}
                 
                 <div className="mt-6 text-center">
                     <p className="text-xs text-gray-500">
-                        {isRegistering ? "Already have an account?" : "Don't have an account?"} 
-                        <span onClick={() => setIsRegistering(!isRegistering)} className="text-primary cursor-pointer hover:underline ml-1 font-bold">
-                            {isRegistering ? 'Login' : 'Register'}
+                        {mode === 'login' ? "Don't have an account?" : "Already have an account?"} 
+                        <span onClick={() => setMode(mode === 'login' ? 'register' : 'login')} className="text-primary cursor-pointer hover:underline ml-1 font-bold">
+                            {mode === 'login' ? 'Register' : 'Login'}
                         </span>
                     </p>
                 </div>
@@ -211,12 +248,17 @@ const OrderRow: React.FC<{ order: Order }> = ({ order }) => {
 };
 
 export const DashboardPage: React.FC = () => {
-    const { user, logout } = useAuth();
+    const { user, logout, updateUserProfile } = useAuth();
     const navigate = useNavigate();
+    const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState<'orders' | 'keys' | 'profile'>('orders');
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
     const [announcement, setAnnouncement] = useState<{title: string, content: string} | null>(null);
+
+    // Profile Edit State
+    const [profileData, setProfileData] = useState({ first_name: '', last_name: '', password: '' });
+    const [savingProfile, setSavingProfile] = useState(false);
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -232,6 +274,24 @@ export const DashboardPage: React.FC = () => {
         fetchOrders();
         fetchNotice();
     }, [user, navigate]);
+
+    const handleUpdateProfile = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSavingProfile(true);
+        try {
+            const success = await updateUserProfile(profileData);
+            if (success) {
+                showToast("Profile updated! Re-login if you changed password.");
+                if (profileData.password) logout();
+            } else {
+                showToast("Update failed", "error");
+            }
+        } catch {
+            showToast("Update failed", "error");
+        } finally {
+            setSavingProfile(false);
+        }
+    };
 
     if (!user) return null;
 
@@ -286,7 +346,19 @@ export const DashboardPage: React.FC = () => {
                                     {orders.every(o => !o.line_items.some(i => i.license_key)) && <p className="text-gray-500 text-center py-10">No active licenses found.</p>}
                                 </div>
                             )}
-                            {activeTab === 'profile' && (<div className="bg-dark-900 p-8 rounded-xl border border-white/10 text-center"><p className="text-gray-400">Profile editing is disabled in this version.</p></div>)}
+                            
+                            {activeTab === 'profile' && (
+                                <div className="bg-dark-900 p-8 rounded-xl border border-white/10">
+                                    <form onSubmit={handleUpdateProfile} className="space-y-6">
+                                        <div className="grid grid-cols-2 gap-6">
+                                            <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">First Name</label><input type="text" onChange={(e) => setProfileData({...profileData, first_name: e.target.value})} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary outline-none" placeholder="Change First Name" /></div>
+                                            <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Last Name</label><input type="text" onChange={(e) => setProfileData({...profileData, last_name: e.target.value})} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary outline-none" placeholder="Change Last Name" /></div>
+                                        </div>
+                                        <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">New Password (Optional)</label><input type="password" onChange={(e) => setProfileData({...profileData, password: e.target.value})} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary outline-none" placeholder="Leave empty to keep current" /></div>
+                                        <button disabled={savingProfile} type="submit" className="w-full bg-primary hover:bg-cyan-400 text-black font-black uppercase py-4 rounded-xl shadow-glow transition-all">{savingProfile ? 'Saving...' : 'Update Profile'}</button>
+                                    </form>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

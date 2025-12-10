@@ -136,7 +136,7 @@ export const api = {
       } catch (e) { return null; }
   },
 
-  // 🚀 OFFICIAL DIRECT PAYMENT STRATEGY (Enabled by Dual License)
+  // 🚀 OFFICIAL DIRECT PAYMENT STRATEGY
   createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string }> => {
     const line_items = orderData.items.map((item: any) => ({
         product_id: item.id,
@@ -173,7 +173,7 @@ export const api = {
         if (response.ok) {
             const data = await response.json();
             
-            // 1. Try Direct Gateway Link (Best Experience)
+            // 1. Try Direct Gateway Link
             if (data.payment_url) {
                 return {
                     id: data.id,
@@ -182,8 +182,7 @@ export const api = {
                 };
             }
             
-            // 2. Fallback to WP Checkout (Safe Backup)
-            // Format: domain/checkout/order-pay/ID/?pay_for_order=true&key=ORDER_KEY
+            // 2. Fallback to WP Checkout
             if (orderData.payment_method !== 'manual' && data.order_key) {
                 const wpPayLink = `https://admin.mhjoygamershub.com/checkout/order-pay/${data.id}/?pay_for_order=true&key=${data.order_key}`;
                 return {
@@ -214,17 +213,13 @@ export const api = {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ order_id: orderId })
           });
-          return response.ok;
-      } catch (e) {
-          // If server call fails, we assume success for UI purposes (as user already paid)
-          // The backend webhook is the ultimate source of truth anyway.
-          // Send emergency email just in case
-          api.sendMessage({ 
-              name: "System", 
-              email: "admin@mhjoygamershub.com", 
-              message: `Client-side verification failed for Order #${orderId}. Check status manually.` 
-          });
-          return true;
+          if (response.ok) {
+              const data = await response.json();
+              return data.success === true;
+          }
+          return false;
+      } catch (error) {
+          return false;
       }
   },
 
@@ -263,6 +258,29 @@ export const api = {
       } catch (error) { throw error; }
   },
 
+  resetPassword: async (email: string): Promise<boolean> => {
+      try {
+          const response = await fetch(`${CUSTOM_API_URL}/reset-password`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email })
+          });
+          if (!response.ok) throw new Error("Failed to reset");
+          return true;
+      } catch (e) { throw e; }
+  },
+
+  updateProfile: async (userId: number, data: any): Promise<boolean> => {
+      try {
+          const response = await fetch(`${CUSTOM_API_URL}/update-profile`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: userId, ...data })
+          });
+          return response.ok;
+      } catch (e) { return false; }
+  },
+
   getUserOrders: async (userId: number): Promise<Order[]> => {
       try {
           const orders = await fetchWooCommerce(`/orders?customer=${userId}`);
@@ -276,7 +294,6 @@ export const api = {
               line_items: o.line_items.map((i: any) => ({
                   name: i.name,
                   quantity: i.quantity,
-                  // Map Exposed License Keys
                   license_key: i.exposed_license_keys ? i.exposed_license_keys.join(', ') : (o.meta_data.find((m:any) => m.key === '_license_key')?.value || null),
                   image: i.image?.src || "https://via.placeholder.com/150",
                   downloads: i.downloads || []

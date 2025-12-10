@@ -7,6 +7,7 @@ interface AuthContextType {
     user: User | null;
     login: (email: string, password?: string) => Promise<void>;
     register: (data: any) => Promise<User>;
+    updateUserProfile: (data: any) => Promise<boolean>;
     logout: () => void;
     isLoading: boolean;
 }
@@ -49,13 +50,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
+    const updateUserProfile = async (data: any) => {
+        if (!user) return false;
+        setIsLoading(true);
+        try {
+            const success = await api.updateProfile(user.id, data);
+            if (success) {
+                // Update local state partially
+                const updatedUser = { ...user, ...data }; // Assuming data matches User structure loosely
+                setUser(updatedUser);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
+            }
+            return success;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const logout = () => {
         setUser(null);
         localStorage.removeItem(STORAGE_KEY);
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>
+        <AuthContext.Provider value={{ user, login, register, updateUserProfile, logout, isLoading }}>
             {children}
         </AuthContext.Provider>
     );
