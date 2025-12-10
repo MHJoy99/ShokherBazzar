@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
@@ -34,6 +34,7 @@ export const Cart: React.FC = () => {
 
   // NEW: Detect return from Payment Gateway
   const [searchParams] = useSearchParams();
+  const verificationRun = useRef(false);
 
   useEffect(() => {
       const status = searchParams.get('status');
@@ -41,16 +42,19 @@ export const Cart: React.FC = () => {
       const invoice = searchParams.get('invoice_id'); 
       
       // Accept 'success' OR 'completed' as valid status
-      // STABILITY FIX: Removed verifyPayment call to prevent infinite loops.
-      // We assume if the user is redirected here with success, it worked.
       if ((status === 'success' || status === 'completed') && (oid || invoice)) {
           const finalId = oid ? parseInt(oid) : (invoice ? parseInt(invoice) : 0);
           setOrderId(finalId);
           setStep(3);
           clearCart();
-          showToast("Order Completed!", "success");
+          
+          // SAFETY LOCK: Run verification exactly ONCE to prevent loops
+          if (!verificationRun.current && finalId > 0) {
+              verificationRun.current = true;
+              api.verifyPayment(finalId);
+          }
       }
-  }, [searchParams, clearCart, showToast]);
+  }, [searchParams, clearCart]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -135,6 +139,7 @@ export const Cart: React.FC = () => {
                 window.location.href = result.payment_url; 
             } else { 
                 if (paymentMethod === 'uddoktapay') {
+                    // Fallback if URL missing
                     setPaymentError(true);
                 } else {
                     clearCart();
@@ -328,96 +333,61 @@ export const Cart: React.FC = () => {
                                 <button 
                                     type="button" 
                                     onClick={() => setPaymentMethod('uddoktapay')} 
-                                    className={`relative p-5 rounded-xl border-2 transition-all flex flex-col items-center gap-3 group overflow-hidden ${paymentMethod === 'uddoktapay' ? 'bg-primary/10 border-primary shadow-glow-sm' : 'bg-dark-950 border-white/10 hover:border-white/20'}`}
+                                    className={`relative p-5 rounded-xl border-2 transition-all flex flex-col items-center gap-3 group overflow-hidden ${paymentMethod === 'uddoktapay' ? 'bg-primary/10 border-primary shadow-glow-sm' : 'bg-dark-900 border-white/10 hover:border-white/20'}`}
                                 >
                                     {paymentMethod === 'uddoktapay' && <div className="absolute top-2 right-2 text-primary"><i className="fas fa-check-circle"></i></div>}
                                     <div className="flex items-center gap-2 grayscale group-hover:grayscale-0 transition-all opacity-80 group-hover:opacity-100">
-                                        <div className="w-8 h-8 rounded-full bg-pink-600 flex items-center justify-center text-white text-[10px] font-bold">bKash</div>
-                                        <div className="w-8 h-8 rounded-full bg-orange-600 flex items-center justify-center text-white text-[10px] font-bold">Nagad</div>
-                                        <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-[10px] font-bold">Rckt</div>
+                                        <div className="w-8 h-8 rounded-full bg-pink-600 p-1"><img src="https://raw.githubusercontent.com/shipu/bkash-example/master/bkash_payment_logo.png" className="w-full h-full object-contain" alt="" /></div>
+                                        <div className="w-8 h-8 rounded-full bg-orange-600 p-1"><img src="https://freepnglogo.com/images/all_img/1701511252nagad-logo-transparent.png" className="w-full h-full object-contain" alt="" /></div>
+                                        <div className="w-8 h-8 rounded-full bg-purple-600 p-1"></div>
                                     </div>
-                                    <div className="text-center">
-                                        <p className={`font-black uppercase text-sm ${paymentMethod === 'uddoktapay' ? 'text-white' : 'text-gray-400'}`}>{config.payment.methodTitle}</p>
-                                        <p className="text-[10px] text-gray-500">Automated & Secure</p>
-                                    </div>
+                                    <span className="text-xs font-bold text-white uppercase">{config.payment.methodTitle}</span>
+                                    <span className="text-[10px] text-green-500">Automated • Instant</span>
                                 </button>
 
                                 {/* MANUAL PAYMENT CARD */}
                                 <button 
                                     type="button" 
                                     onClick={() => setPaymentMethod('manual')} 
-                                    className={`relative p-5 rounded-xl border-2 transition-all flex flex-col items-center gap-3 group ${paymentMethod === 'manual' ? 'bg-white/10 border-white shadow-lg' : 'bg-dark-950 border-white/10 hover:border-white/20'}`}
+                                    className={`relative p-5 rounded-xl border-2 transition-all flex flex-col items-center gap-3 group ${paymentMethod === 'manual' ? 'bg-primary/10 border-primary shadow-glow-sm' : 'bg-dark-900 border-white/10 hover:border-white/20'}`}
                                 >
-                                    {paymentMethod === 'manual' && <div className="absolute top-2 right-2 text-white"><i className="fas fa-check-circle"></i></div>}
-                                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg group-hover:scale-110 transition-transform">
-                                        <i className="fas fa-paper-plane"></i>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className={`font-black uppercase text-sm ${paymentMethod === 'manual' ? 'text-white' : 'text-gray-400'}`}>Send Money</p>
-                                        <p className="text-[10px] text-gray-500">Manual Verification</p>
-                                    </div>
+                                    {paymentMethod === 'manual' && <div className="absolute top-2 right-2 text-primary"><i className="fas fa-check-circle"></i></div>}
+                                    <i className="fas fa-hand-holding-usd text-2xl text-gray-400 group-hover:text-white transition-colors"></i>
+                                    <span className="text-xs font-bold text-white uppercase">Manual Send Money</span>
+                                    <span className="text-[10px] text-gray-500">Manual Verification</span>
                                 </button>
                             </div>
 
-                            <AnimatePresence mode='wait'>
-                                {paymentMethod === 'uddoktapay' ? (
-                                    <motion.div 
-                                        key="auto"
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, height: 0 }}
-                                        className="p-4 bg-primary/5 border border-primary/20 rounded-xl flex items-center gap-4"
-                                    >
-                                        <div className="w-12 h-12 bg-dark-950 rounded-lg flex items-center justify-center text-primary text-xl shadow-glow-sm">
-                                            <i className="fas fa-bolt"></i>
-                                        </div>
-                                        <div>
-                                            <p className="text-white font-bold text-sm">Best Choice</p>
-                                            <p className="text-xs text-gray-400">Payment confirms instantly. No waiting.</p>
-                                        </div>
-                                    </motion.div>
-                                ) : (
-                                    <motion.div 
-                                        key="manual"
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, height: 0 }}
-                                        className="space-y-4"
-                                    >
-                                        <div className="p-4 bg-white/5 rounded-xl border border-white/10 text-center">
-                                            <p className="text-sm text-gray-300 mb-4">{config.payment.manualInstructions}</p>
-                                            
-                                            <div className="grid gap-3">
-                                                <div className="flex items-center justify-between bg-dark-950 p-3 rounded-lg border border-pink-500/30 relative overflow-hidden">
-                                                    <div className="absolute left-0 top-0 w-1 h-full bg-pink-500"></div>
-                                                    <span className="text-pink-500 font-bold text-xs uppercase ml-2">bKash Personal</span>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-white font-mono font-bold">{config.payment.bkashPersonal}</span>
-                                                        <button type="button" onClick={() => copyToClipboard(config.payment.bkashPersonal)} className="text-gray-500 hover:text-white"><i className="fas fa-copy"></i></button>
+                            {/* MANUAL INSTRUCTIONS */}
+                            <AnimatePresence>
+                                {paymentMethod === 'manual' && (
+                                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                                        <div className="bg-dark-950 p-6 rounded-xl border border-white/5 mb-6">
+                                            <p className="text-gray-400 text-xs mb-4">{config.payment.manualInstructions}</p>
+                                            <div className="space-y-3 mb-6">
+                                                {config.payment.bkashPersonal && (
+                                                    <div className="flex justify-between items-center bg-dark-900 p-3 rounded border border-white/5">
+                                                        <div className="flex items-center gap-3"><div className="w-6 h-6 rounded-full bg-pink-600"></div><span className="text-white font-bold text-sm">bKash Personal</span></div>
+                                                        <div className="flex items-center gap-3"><span className="font-mono text-gray-300">{config.payment.bkashPersonal}</span><button type="button" onClick={() => copyToClipboard(config.payment.bkashPersonal)} className="text-primary hover:text-white"><i className="fas fa-copy"></i></button></div>
                                                     </div>
-                                                </div>
-                                                <div className="flex items-center justify-between bg-dark-950 p-3 rounded-lg border border-orange-500/30 relative overflow-hidden">
-                                                    <div className="absolute left-0 top-0 w-1 h-full bg-orange-500"></div>
-                                                    <span className="text-orange-500 font-bold text-xs uppercase ml-2">Nagad Personal</span>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-white font-mono font-bold">{config.payment.nagadPersonal}</span>
-                                                        <button type="button" onClick={() => copyToClipboard(config.payment.nagadPersonal)} className="text-gray-500 hover:text-white"><i className="fas fa-copy"></i></button>
+                                                )}
+                                                {config.payment.nagadPersonal && (
+                                                    <div className="flex justify-between items-center bg-dark-900 p-3 rounded border border-white/5">
+                                                        <div className="flex items-center gap-3"><div className="w-6 h-6 rounded-full bg-orange-600"></div><span className="text-white font-bold text-sm">Nagad Personal</span></div>
+                                                        <div className="flex items-center gap-3"><span className="font-mono text-gray-300">{config.payment.nagadPersonal}</span><button type="button" onClick={() => copyToClipboard(config.payment.nagadPersonal)} className="text-primary hover:text-white"><i className="fas fa-copy"></i></button></div>
                                                     </div>
-                                                </div>
-                                                <div className="flex items-center justify-between bg-dark-950 p-3 rounded-lg border border-purple-500/30 relative overflow-hidden">
-                                                    <div className="absolute left-0 top-0 w-1 h-full bg-purple-500"></div>
-                                                    <span className="text-purple-500 font-bold text-xs uppercase ml-2">Rocket Personal</span>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-white font-mono font-bold">{config.payment.rocketPersonal}</span>
-                                                        <button type="button" onClick={() => copyToClipboard(config.payment.rocketPersonal)} className="text-gray-500 hover:text-white"><i className="fas fa-copy"></i></button>
+                                                )}
+                                                {config.payment.rocketPersonal && config.payment.rocketPersonal !== "0000-000000" && (
+                                                    <div className="flex justify-between items-center bg-dark-900 p-3 rounded border border-white/5">
+                                                        <div className="flex items-center gap-3"><div className="w-6 h-6 rounded-full bg-purple-600"></div><span className="text-white font-bold text-sm">Rocket Personal</span></div>
+                                                        <div className="flex items-center gap-3"><span className="font-mono text-gray-300">{config.payment.rocketPersonal}</span><button type="button" onClick={() => copyToClipboard(config.payment.rocketPersonal)} className="text-primary hover:text-white"><i className="fas fa-copy"></i></button></div>
                                                     </div>
-                                                </div>
+                                                )}
                                             </div>
-                                        </div>
-
-                                        <div className="space-y-3 pt-4 border-t border-white/5">
-                                            <input type="text" placeholder="Enter Transaction ID (TrxID)" className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-white outline-none font-mono" required={paymentMethod === 'manual'} value={trxId} onChange={(e) => setTrxId(e.target.value)} />
-                                            <input type="text" placeholder="Your Sender Number" className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-white outline-none" required={paymentMethod === 'manual'} value={senderNumber} onChange={(e) => setSenderNumber(e.target.value)} />
+                                            <div className="space-y-4">
+                                                <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Your Sender Number</label><input type="text" required value={senderNumber} onChange={(e) => setSenderNumber(e.target.value)} placeholder="017xxxxxxxx" className="w-full bg-dark-900 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" /></div>
+                                                <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Transaction ID (TrxID)</label><input type="text" required value={trxId} onChange={(e) => setTrxId(e.target.value)} placeholder="e.g. 9G7HG6..." className="w-full bg-dark-900 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" /></div>
+                                            </div>
                                         </div>
                                     </motion.div>
                                 )}
@@ -425,8 +395,8 @@ export const Cart: React.FC = () => {
                         </div>
                    )}
 
-                  <button disabled={loading} type="submit" className="w-full bg-green-600 hover:bg-green-500 text-white font-black uppercase italic tracking-wider py-4 rounded-xl shadow-glow transition-all">
-                    {loading ? 'Processing...' : (isFreeOrder ? 'Place Free Order' : (paymentMethod === 'uddoktapay' ? `Pay ৳${finalTotal.toFixed(0)} Now` : `Verify Payment ৳${finalTotal.toFixed(0)}`))}
+                  <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white font-black uppercase italic tracking-widest py-5 rounded-2xl shadow-glow text-xl transition-all transform active:scale-95 disabled:opacity-50 disabled:scale-100">
+                      {loading ? 'Processing...' : isFreeOrder ? 'Place Free Order' : `Pay ৳${finalTotal.toFixed(0)} Now`}
                   </button>
               </form>
           </div>
