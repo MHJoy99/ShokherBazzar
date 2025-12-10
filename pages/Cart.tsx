@@ -38,11 +38,19 @@ export const Cart: React.FC = () => {
   useEffect(() => {
       const status = searchParams.get('status');
       const oid = searchParams.get('order_id');
+      const invoice = searchParams.get('invoice_id'); // Some gateways return this
       
-      if (status === 'success' && oid) {
-          setOrderId(parseInt(oid));
+      // Accept 'success' OR 'completed' as valid status
+      if ((status === 'success' || status === 'completed') && (oid || invoice)) {
+          const finalId = oid ? parseInt(oid) : (invoice ? parseInt(invoice) : 0);
+          setOrderId(finalId);
           setStep(3);
           clearCart();
+          
+          // Trigger Backend Verification Immediately
+          if(finalId > 0) {
+              api.verifyPayment(finalId);
+          }
       }
   }, [searchParams, clearCart]);
 
