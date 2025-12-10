@@ -206,8 +206,11 @@ export const api = {
     }
   },
 
-  // TRIGGER BACKEND STATUS UPDATE (Silent & Robust)
+  // TRIGGER BACKEND STATUS UPDATE (Delayed & Safe)
   verifyPayment: async (orderId: number): Promise<boolean> => {
+      // Small delay to allow Gateway to update their DB first
+      await new Promise(r => setTimeout(r, 1500));
+      
       try {
           const res = await fetch(`${CUSTOM_API_URL}/verify-payment`, {
               method: 'POST',
@@ -314,4 +317,3 @@ export const api = {
       } catch (e) { return []; }
   }
 };
-    
