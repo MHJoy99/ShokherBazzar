@@ -29,6 +29,9 @@ export const Cart: React.FC = () => {
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [verifyingCoupon, setVerifyingCoupon] = useState(false);
 
+  // DEBUG STATE
+  const [debugData, setDebugData] = useState<any>(null);
+
   // NEW: Detect return from Payment Gateway
   const [searchParams] = useSearchParams();
 
@@ -87,6 +90,7 @@ export const Cart: React.FC = () => {
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setDebugData(null); // Reset debug data
     try {
         let customerId = user?.id;
 
@@ -125,9 +129,20 @@ export const Cart: React.FC = () => {
                 // Redirect to Payment Gateway (UddoktaPay via WP)
                 window.location.href = result.payment_url; 
             } else { 
-                // Manual Payment Success (or fallback if no URL)
-                clearCart();
-                setStep(3); 
+                // Manual Payment Success OR Failed to find URL for Automatic
+                if (paymentMethod === 'uddoktapay') {
+                    // !!! DEBUG MODE !!!
+                    // Automatic Payment selected but no URL found. Show debug info.
+                    setDebugData({
+                        id: result.id,
+                        meta_data: result.debug_meta,
+                        payment_result: result.debug_payment_result
+                    });
+                } else {
+                    // Manual Payment
+                    clearCart();
+                    setStep(3); 
+                }
             }
         }
     } catch (error) { alert("Order failed. Please try again."); } finally { setLoading(false); }
@@ -168,6 +183,36 @@ export const Cart: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 min-h-screen">
       <Helmet><title>Checkout | {config.siteName}</title></Helmet>
+      
+      {/* DEBUG MODAL */}
+      {debugData && (
+           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+               <div className="bg-dark-900 border-2 border-red-500 rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6 shadow-2xl relative">
+                   <div className="flex items-center gap-4 mb-4 text-red-500">
+                        <i className="fas fa-bug text-3xl"></i>
+                        <div>
+                            <h2 className="text-xl font-black uppercase">Payment Link Missing</h2>
+                            <p className="text-xs text-gray-400 uppercase font-bold">Debug Mode Active</p>
+                        </div>
+                   </div>
+                   <p className="text-gray-300 mb-4 text-sm">
+                       The order was created (<b>#{debugData.id}</b>), but the website couldn't find the UddoktaPay link in the API response.
+                       <br/><br/>
+                       <span className="text-white font-bold">Please screenshot the data below and send it to the developer:</span>
+                   </p>
+
+                   <div className="bg-black p-4 rounded-xl border border-white/10 font-mono text-[10px] text-green-400 overflow-x-auto whitespace-pre-wrap">
+                       {JSON.stringify(debugData, null, 2)}
+                   </div>
+
+                   <div className="mt-6 flex justify-end gap-4">
+                       <button onClick={() => { clearCart(); setStep(3); }} className="px-6 py-2 rounded-lg border border-white/10 text-gray-400 hover:text-white font-bold uppercase text-xs">Ignore & Finish Order</button>
+                       <button onClick={() => setDebugData(null)} className="px-6 py-2 rounded-lg bg-red-600 text-white font-bold uppercase text-xs">Close Debugger</button>
+                   </div>
+               </div>
+           </div>
+       )}
+
       <div className="text-center mb-10"><h1 className="text-4xl font-black text-white mb-2 uppercase italic">{step === 1 ? 'Your Cart' : 'Secure Checkout'}</h1></div>
       <StepWizard />
       {step === 1 && (

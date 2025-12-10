@@ -157,7 +157,7 @@ export const api = {
   },
 
   // --- REAL ORDER CREATION ---
-  createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string }> => {
+  createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string; debug_meta?: any; debug_payment_result?: any }> => {
     console.log("Submitting Order to WooCommerce:", orderData);
 
     const line_items = orderData.items.map((item: any) => ({
@@ -243,7 +243,9 @@ export const api = {
         return { 
             id: order.id, 
             success: true,
-            payment_url: payment_url
+            payment_url: payment_url || undefined,
+            debug_meta: order.meta_data, // RETURN DEBUG DATA
+            debug_payment_result: order.payment_result // RETURN DEBUG DATA
         };
     } catch (error) {
         console.error("Order Creation Failed:", error);
