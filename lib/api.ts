@@ -1,4 +1,5 @@
 
+
 import { Product, Category, Order, User, OrderNote, Coupon } from '../types';
 import { config } from '../config';
 
@@ -291,6 +292,18 @@ export const api = {
           });
           return response.ok;
       } catch (e) { return false; }
+  },
+
+  // NEW: Fetch Fresh Profile
+  getProfile: async (email: string): Promise<User | null> => {
+      // In a real OAuth system, we would use a token. 
+      // Here we will reuse the login endpoint but just to refresh data if we have credentials, 
+      // or ideally we need a /me endpoint. 
+      // For now, since we don't have a /me endpoint in WP without plugins, we will skip auto-refresh
+      // and rely on what we have, OR re-login silently if needed.
+      // Actually, we can just return null and rely on the AuthContext's local state for now
+      // to keep it simple as per request.
+      return null;
   },
 
   getUserOrders: async (userId: number): Promise<Order[]> => {

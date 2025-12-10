@@ -263,6 +263,9 @@ export const DashboardPage: React.FC = () => {
     // Profile Edit State
     const [profileData, setProfileData] = useState({ first_name: '', last_name: '', password: '' });
     const [savingProfile, setSavingProfile] = useState(false);
+    
+    // Toggle for Debug Info
+    const [showDebug, setShowDebug] = useState(false);
 
     const fetchOrders = useCallback(async () => {
         if(!user) return;
@@ -370,7 +373,8 @@ export const DashboardPage: React.FC = () => {
                                 <div className="grid grid-cols-1 gap-6">
                                     {orders.map(order => (
                                         order.line_items.filter(item => item.license_key).map((item, idx) => {
-                                            const isEncrypted = item.license_key?.startsWith('def50');
+                                            const keyStr = item.license_key || '';
+                                            const isEncrypted = keyStr.startsWith('def50') || keyStr.length > 50; // Heuristic for long/garbage strings
                                             
                                             return (
                                                 <div key={`${order.id}-${idx}`} className="bg-gradient-to-r from-dark-900 to-dark-950 border border-primary/30 p-6 rounded-xl relative overflow-hidden group">
@@ -390,29 +394,24 @@ export const DashboardPage: React.FC = () => {
                                                                 <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
                                                                     <div className="flex items-center gap-2 mb-2">
                                                                         <i className="fas fa-exclamation-triangle text-red-500 animate-pulse"></i>
-                                                                        <span className="text-red-400 font-bold text-xs uppercase tracking-wider">System Info</span>
+                                                                        <span className="text-red-400 font-bold text-xs uppercase tracking-wider">Pending Decryption</span>
                                                                     </div>
                                                                     <p className="text-gray-400 text-[11px] leading-relaxed mb-3">
-                                                                        License key is pending decryption. Please contact support if this persists.
+                                                                        The system is processing your key. If it doesn't appear correctly, please contact support.
                                                                     </p>
-                                                                    <div className="bg-black/50 rounded p-2 border border-white/5 relative mb-3">
-                                                                        <p className="text-[10px] text-gray-500 font-mono uppercase mb-1">Encrypted Data:</p>
-                                                                        <code className="block text-[10px] text-red-400/80 font-mono break-all whitespace-normal bg-transparent">
-                                                                            {item.license_key}
-                                                                        </code>
-                                                                        <button 
-                                                                            onClick={() => { 
-                                                                                navigator.clipboard.writeText(item.license_key || ''); 
-                                                                                showToast("Debug info copied", "info");
-                                                                            }} 
-                                                                            className="absolute top-2 right-2 text-gray-500 hover:text-white"
-                                                                            title="Copy for Support"
-                                                                        >
-                                                                            <i className="fas fa-copy"></i>
-                                                                        </button>
-                                                                    </div>
+                                                                    
+                                                                    {showDebug ? (
+                                                                         <div className="bg-black/50 rounded p-2 border border-white/5 relative mb-3">
+                                                                             <code className="block text-[10px] text-red-400/80 font-mono break-all whitespace-normal bg-transparent">
+                                                                                 {keyStr}
+                                                                             </code>
+                                                                         </div>
+                                                                    ) : (
+                                                                        <button onClick={() => setShowDebug(true)} className="text-[10px] text-gray-500 hover:text-white underline mb-3">Show Debug Info</button>
+                                                                    )}
+
                                                                     <a 
-                                                                        href={`mailto:${config.contact.email}?subject=Decryption Error Order #${order.id}&body=My license key is showing as encrypted for Order #${order.id}.%0D%0A%0D%0AKey start: ${item.license_key?.substring(0, 20)}...`}
+                                                                        href={`mailto:${config.contact.email}?subject=Decryption Error Order #${order.id}&body=My license key is showing as encrypted for Order #${order.id}.%0D%0A%0D%0AKey start: ${keyStr.substring(0, 20)}...`}
                                                                         className="inline-block bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-bold px-3 py-2 rounded transition-colors"
                                                                     >
                                                                         <i className="fas fa-envelope mr-2"></i> Report Issue
