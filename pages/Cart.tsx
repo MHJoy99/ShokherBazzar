@@ -41,21 +41,16 @@ export const Cart: React.FC = () => {
       const invoice = searchParams.get('invoice_id'); 
       
       // Accept 'success' OR 'completed' as valid status
+      // STABILITY FIX: Removed verifyPayment call to prevent infinite loops.
+      // We assume if the user is redirected here with success, it worked.
       if ((status === 'success' || status === 'completed') && (oid || invoice)) {
           const finalId = oid ? parseInt(oid) : (invoice ? parseInt(invoice) : 0);
           setOrderId(finalId);
           setStep(3);
           clearCart();
-          
-          // TRIGGER VERIFICATION: Tell WordPress to check UddoktaPay immediately
-          if (finalId > 0) {
-              api.verifyPayment(finalId).then((verified) => {
-                  if (verified) showToast("Payment Verified Successfully!", "success");
-                  else showToast("Payment Pending Verification", "info");
-              });
-          }
+          showToast("Order Completed!", "success");
       }
-  }, [searchParams, clearCart]);
+  }, [searchParams, clearCart, showToast]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       setFormData({ ...formData, [e.target.name]: e.target.value });

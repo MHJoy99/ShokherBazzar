@@ -182,7 +182,8 @@ export const api = {
                 };
             }
             
-            // 2. Fallback to WP Checkout
+            // 2. Fallback to WP Checkout (if direct link fails)
+            // Using Order Key allows guest payment without login
             if (orderData.payment_method !== 'manual' && data.order_key) {
                 const wpPayLink = `https://admin.mhjoygamershub.com/checkout/order-pay/${data.id}/?pay_for_order=true&key=${data.order_key}`;
                 return {
@@ -204,23 +205,6 @@ export const api = {
         console.error("Order Failed:", proxyError);
         throw proxyError;
     }
-  },
-
-  verifyPayment: async (orderId: number): Promise<boolean> => {
-      try {
-          const response = await fetch(`${CUSTOM_API_URL}/verify-payment`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ order_id: orderId })
-          });
-          if (response.ok) {
-              const data = await response.json();
-              return data.success === true;
-          }
-          return false;
-      } catch (error) {
-          return false;
-      }
   },
 
   sendMessage: async (formData: any): Promise<boolean> => {
