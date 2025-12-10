@@ -18,12 +18,32 @@ export const CategoryPage: React.FC = () => {
       setLoading(true);
       window.scrollTo(0, 0);
       if (slug) {
-        const [prods, cats] = await Promise.all([
-          api.getProducts(slug === 'all' ? 'all' : slug),
-          api.getCategories()
-        ]);
-        setProducts(prods);
-        setCategoryInfo(cats.find(c => c.slug === slug) || { id: 0, name: slug || 'Unknown', slug: slug || '', count: prods.length });
+        try {
+            const [prods, cats] = await Promise.all([
+              api.getProducts(slug === 'all' ? 'all' : slug),
+              api.getCategories()
+            ]);
+            setProducts(prods);
+            
+            // Find category info for title - check against all categories
+            const foundCat = cats.find(c => c.slug === slug);
+            
+            if (foundCat) {
+                setCategoryInfo(foundCat);
+            } else {
+                // Fallback if not found in the initial list (unlikely with per_page=100)
+                // or if it's 'all'
+                const displaySlug = slug.replace(/-/g, ' ');
+                setCategoryInfo({ 
+                    id: 0, 
+                    name: slug === 'all' ? 'All Products' : displaySlug, 
+                    slug: slug, 
+                    count: prods.length 
+                });
+            }
+        } catch (e) {
+            console.error("Category load failed", e);
+        }
       }
       setLoading(false);
     };

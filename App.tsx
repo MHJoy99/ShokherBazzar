@@ -19,6 +19,7 @@ const Cart = lazy(() => import('./pages/Cart').then(module => ({ default: module
 const CategoryPage = lazy(() => import('./pages/CategoryPage').then(module => ({ default: module.CategoryPage })));
 const Admin = lazy(() => import('./pages/Admin').then(module => ({ default: module.Admin })));
 const NotFound = lazy(() => import('./pages/NotFound').then(module => ({ default: module.NotFound })));
+const DynamicPage = lazy(() => import('./pages/DynamicPage').then(module => ({ default: module.DynamicPage })));
 
 // Lazy load Auth & Static pages which export multiple components
 const AuthPages = import('./pages/AuthPages');
@@ -67,7 +68,16 @@ const App: React.FC = () => {
                         <Routes>
                             <Route path="/" element={<Home />} />
                             <Route path="/product/:slug" element={<ProductDetail />} />
+                            
+                            {/* Standard Category Route */}
                             <Route path="/category/:slug" element={<CategoryPage />} />
+                            
+                            {/* Legacy SEO Route (e.g., old WordPress links) */}
+                            <Route path="/product-category/:slug" element={<CategoryPage />} />
+                            
+                            {/* DYNAMIC WP PAGES ROUTE */}
+                            <Route path="/page/:slug" element={<DynamicPage />} />
+                            
                             <Route path="/cart" element={<Cart />} />
                             <Route path="/admin" element={<Admin />} />
                             

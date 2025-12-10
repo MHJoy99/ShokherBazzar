@@ -70,15 +70,27 @@ const mapWooProduct = (p: any): Product => ({
 });
 
 export const api = {
-  getProducts: async (category?: string): Promise<Product[]> => {
+  getProducts: async (categorySlug?: string): Promise<Product[]> => {
     try {
-      // Direct Fetch - No Caching as requested
-      const data = await fetchWooCommerce('/products?per_page=50');
-      let products = data.map(mapWooProduct);
-      if (category && category !== 'all') {
-        products = products.filter((p: Product) => p.categories.some(c => c.slug === category));
+      let endpoint = '/products?per_page=50'; // Default fetch
+
+      if (categorySlug && categorySlug !== 'all') {
+          // 1. First, find the Category ID from the slug
+          // This ensures we get ALL products in that category, not just "recent products that happen to be in this category"
+          const cats = await fetchWooCommerce(`/products/categories?slug=${categorySlug}`);
+          
+          if (cats.length > 0) {
+              const catId = cats[0].id;
+              endpoint = `/products?category=${catId}&per_page=50`;
+          } else {
+              // If category not found, return empty array immediately
+              return [];
+          }
       }
-      return products;
+
+      // 2. Fetch products using the specific endpoint
+      const data = await fetchWooCommerce(endpoint);
+      return data.map(mapWooProduct);
     } catch (error) {
       return [];
     }
@@ -87,7 +99,6 @@ export const api = {
     try {
       let data;
       // Determine if the input is an ID (number) or Slug (string)
-      // Check for pure numeric string to handle backward compatibility of old links
       const isId = typeof idOrSlug === 'number' || /^\d+$/.test(String(idOrSlug));
 
       if (isId) {
@@ -117,7 +128,6 @@ export const api = {
                  stock_status: v.stock_status
              })).sort((a: any, b: any) => {
                  // ROBUST SORTING: LOW TO HIGH
-                 // We parse Float to ensure 100 comes after 50 (string sort would put 100 before 50)
                  const priceA = parseFloat(a.price);
                  const priceB = parseFloat(b.price);
                  return priceA - priceB;
@@ -140,7 +150,8 @@ export const api = {
   },
   getCategories: async (): Promise<Category[]> => {
     try {
-      const data = await fetchWooCommerce('/products/categories?hide_empty=true&per_page=20');
+      // Increased limit to 100 to ensure dropdowns find all categories
+      const data = await fetchWooCommerce('/products/categories?hide_empty=true&per_page=100');
       return data.map((c: any) => ({ id: c.id, name: c.name, slug: c.slug, count: c.count }));
     } catch (error) {
       return MOCK_CATEGORIES;
