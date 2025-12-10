@@ -251,7 +251,7 @@ export const api = {
                     }
                 }
             } catch (directErr) {
-                console.error("Payment Gateway Connection Error");
+                // Silent error
             }
         }
 
@@ -300,18 +300,23 @@ export const api = {
       }
   },
 
-  login: async (email: string): Promise<User> => {
-      const users = await fetchWooCommerce(`/customers?email=${email}`);
-      if (users.length > 0) {
-          const u = users[0];
-          return {
-              id: u.id,
-              username: u.username,
-              email: u.email,
-              avatar_url: u.avatar_url
-          };
+  login: async (email: string, password?: string): Promise<User> => {
+      try {
+          const response = await fetch('https://admin.mhjoygamershub.com/wp-json/custom/v1/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password })
+          });
+          
+          if (!response.ok) {
+              const errData = await response.json();
+              throw new Error(errData.message || "Invalid email or password");
+          }
+          
+          return response.json();
+      } catch (error) {
+          throw error;
       }
-      throw new Error("User not found.");
   },
 
   getUserOrders: async (userId: number): Promise<Order[]> => {

@@ -5,7 +5,7 @@ import { api } from '../lib/api';
 
 interface AuthContextType {
     user: User | null;
-    login: (email: string) => Promise<void>;
+    login: (email: string, password?: string) => Promise<void>;
     register: (data: any) => Promise<User>;
     logout: () => void;
     isLoading: boolean;
@@ -26,10 +26,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     const [isLoading, setIsLoading] = useState(false);
 
-    const login = async (email: string) => {
+    const login = async (email: string, password?: string) => {
         setIsLoading(true);
         try {
-            const userData = await api.login(email);
+            const userData = await api.login(email, password);
             setUser(userData);
             localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
         } finally {

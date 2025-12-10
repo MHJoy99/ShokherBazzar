@@ -27,10 +27,10 @@ export const LoginPage: React.FC = () => {
         setIsSubmitting(true);
         setError('');
         try {
-            await login(email);
+            await login(email, password);
             navigate('/dashboard');
         } catch (err: any) {
-            setError("Login failed. Check your email or try registering.");
+            setError(err.message || "Login failed. Check your credentials.");
         } finally {
             setIsSubmitting(false);
         }
@@ -75,7 +75,7 @@ export const LoginPage: React.FC = () => {
                     <form onSubmit={handleLogin} className="space-y-6">
                         <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Email Address</label><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" placeholder="user@example.com" /></div>
                         <div><label className="block text-xs font-bold uppercase text-gray-500 mb-2">Password</label><input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" placeholder="••••••••" /></div>
-                        <div className="bg-yellow-500/10 border border-yellow-500/20 p-2 rounded text-[10px] text-yellow-500">Note: Password check requires JWT Plugin. Currently checking email only.</div>
+                        
                         <button disabled={isSubmitting} type="submit" className="w-full bg-primary hover:bg-cyan-400 text-black font-black uppercase py-4 rounded-xl shadow-glow transition-all">{isSubmitting ? 'Accessing Vault...' : 'Login'}</button>
                     </form>
                 )}
