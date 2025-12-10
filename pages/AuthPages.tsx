@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
@@ -130,7 +130,7 @@ export const LoginPage: React.FC = () => {
     );
 };
 
-// --- NEW COMPONENT FOR ORDER ROW EXPANSION ---
+// --- ORDER ROW COMPONENT ---
 const OrderRow: React.FC<{ order: Order }> = ({ order }) => {
     const [expanded, setExpanded] = useState(false);
     const [notes, setNotes] = useState<OrderNote[]>([]);
@@ -183,7 +183,7 @@ const OrderRow: React.FC<{ order: Order }> = ({ order }) => {
             {expanded && (
                 <div className="bg-dark-950/50 p-6 border-t border-white/5 text-sm space-y-6 animate-fade-in-up">
                     
-                    {/* 1. Admin Notes (The requested fix) */}
+                    {/* 1. Admin Notes */}
                     <div>
                         <h4 className="text-gray-400 font-bold uppercase text-xs mb-3">Messages from Support</h4>
                         {loadingNotes ? (
@@ -202,7 +202,7 @@ const OrderRow: React.FC<{ order: Order }> = ({ order }) => {
                         )}
                     </div>
 
-                    {/* 2. Downloadable Files (The fundamental fix) */}
+                    {/* 2. Downloadable Files */}
                     {order.line_items.some(i => i.downloads && i.downloads.length > 0) && (
                         <div>
                             <h4 className="text-gray-400 font-bold uppercase text-xs mb-3">Downloadable Files</h4>
@@ -234,7 +234,7 @@ const OrderRow: React.FC<{ order: Order }> = ({ order }) => {
                                  <span className="text-gray-300">{item.name} x{item.quantity}</span>
                                  {/* Show key immediately if present here */}
                                  {item.license_key && (
-                                     <span className="font-mono text-primary bg-primary/10 px-2 py-1 rounded select-all">
+                                     <span className="font-mono text-primary bg-primary/10 px-2 py-1 rounded select-all break-all max-w-[200px] truncate">
                                          {item.license_key}
                                      </span>
                                  )}
@@ -260,20 +260,28 @@ export const DashboardPage: React.FC = () => {
     const [profileData, setProfileData] = useState({ first_name: '', last_name: '', password: '' });
     const [savingProfile, setSavingProfile] = useState(false);
 
+    const fetchOrders = useCallback(async () => {
+        if(!user) return;
+        setLoading(true);
+        try {
+            const data = await api.getUserOrders(user.id);
+            setOrders(data);
+        } catch(e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    }, [user]);
+
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
-        const fetchOrders = async () => { 
-            const data = await api.getUserOrders(user.id); 
-            setOrders(data); 
-            setLoading(false); 
-        };
         const fetchNotice = async () => {
             const notice = await api.getPage('dashboard-notice');
             if (notice) setAnnouncement(notice);
         };
         fetchOrders();
         fetchNotice();
-    }, [user, navigate]);
+    }, [user, navigate, fetchOrders]);
 
     const handleUpdateProfile = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -326,7 +334,15 @@ export const DashboardPage: React.FC = () => {
                     </div>
                 </div>
                 <div className="lg:col-span-3">
-                    <h1 className="text-3xl font-black text-white uppercase italic mb-8 border-l-4 border-primary pl-4">{activeTab === 'orders' ? 'Order History' : activeTab === 'keys' ? 'Digital Vault' : 'Profile Settings'}</h1>
+                    <div className="flex items-center justify-between mb-8 border-l-4 border-primary pl-4">
+                         <h1 className="text-3xl font-black text-white uppercase italic">{activeTab === 'orders' ? 'Order History' : activeTab === 'keys' ? 'Digital Vault' : 'Profile Settings'}</h1>
+                         {(activeTab === 'orders' || activeTab === 'keys') && (
+                             <button onClick={fetchOrders} className="w-8 h-8 rounded-full bg-white/5 hover:bg-primary hover:text-black flex items-center justify-center transition-colors" title="Refresh Orders">
+                                 <i className={`fas fa-sync ${loading ? 'animate-spin' : ''}`}></i>
+                             </button>
+                         )}
+                    </div>
+                    
                     {loading ? (<div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-primary"></div></div>) : (
                         <div className="space-y-6">
                             {/* NEW ORDER ROW COMPONENT IMPLEMENTATION */}
@@ -339,29 +355,72 @@ export const DashboardPage: React.FC = () => {
                             {activeTab === 'keys' && (
                                 <div className="grid grid-cols-1 gap-6">
                                     {orders.map(order => (
-                                        order.line_items.filter(item => item.license_key).map((item, idx) => (
-                                            <div key={`${order.id}-${idx}`} className="bg-gradient-to-r from-dark-900 to-dark-950 border border-primary/30 p-6 rounded-xl relative overflow-hidden group">
-                                                <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-xl group-hover:bg-primary/20 transition-all"></div>
-                                                <div className="flex gap-6 items-start">
-                                                    <div className="w-16 h-20 bg-dark-950 rounded border border-white/10 shrink-0 overflow-hidden">
-                                                        <img src={item.image} className="w-full h-full object-cover" alt="" />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex justify-between items-start mb-2">
-                                                            <h3 className="text-white font-bold uppercase text-sm md:text-base truncate pr-4">{item.name}</h3>
-                                                            <span className="shrink-0 bg-white/10 text-gray-300 text-[10px] font-bold px-2 py-1 rounded border border-white/10">ORDER #{order.id}</span>
+                                        order.line_items.filter(item => item.license_key).map((item, idx) => {
+                                            const isEncrypted = item.license_key?.startsWith('def50');
+                                            
+                                            return (
+                                                <div key={`${order.id}-${idx}`} className="bg-gradient-to-r from-dark-900 to-dark-950 border border-primary/30 p-6 rounded-xl relative overflow-hidden group">
+                                                    <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-xl group-hover:bg-primary/20 transition-all"></div>
+                                                    <div className="flex gap-6 items-start">
+                                                        <div className="w-16 h-20 bg-dark-950 rounded border border-white/10 shrink-0 overflow-hidden">
+                                                            <img src={item.image} className="w-full h-full object-cover" alt="" />
                                                         </div>
-                                                        <p className="text-gray-400 text-xs mb-4">Ready to Redeem</p>
-                                                        <div className="bg-black/50 p-3 rounded-lg border border-primary/30 flex items-center justify-between font-mono text-primary tracking-widest relative">
-                                                            <span className="text-xs md:text-sm break-all mr-2">{item.license_key}</span>
-                                                            <button onClick={() => { navigator.clipboard.writeText(item.license_key || ''); alert('Copied!'); }} className="text-gray-400 hover:text-white transition-colors">
-                                                                <i className="fas fa-copy"></i>
-                                                            </button>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <h3 className="text-white font-bold uppercase text-sm md:text-base truncate pr-4">{item.name}</h3>
+                                                                <span className="shrink-0 bg-white/10 text-gray-300 text-[10px] font-bold px-2 py-1 rounded border border-white/10">ORDER #{order.id}</span>
+                                                            </div>
+                                                            <p className="text-gray-400 text-xs mb-4">Ready to Redeem</p>
+                                                            
+                                                            {isEncrypted ? (
+                                                                <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
+                                                                    <div className="flex items-center gap-2 mb-2">
+                                                                        <i className="fas fa-exclamation-triangle text-red-500 animate-pulse"></i>
+                                                                        <span className="text-red-400 font-bold text-xs uppercase tracking-wider">System Info</span>
+                                                                    </div>
+                                                                    <p className="text-gray-400 text-[11px] leading-relaxed mb-3">
+                                                                        License key is pending decryption. Please contact support if this persists.
+                                                                        <br />
+                                                                        <span className="text-white font-bold text-[10px] opacity-50 block mt-1">Admin Info: Check functions.php decryption logic.</span>
+                                                                    </p>
+                                                                    <div className="bg-black/50 rounded p-2 border border-white/5 relative">
+                                                                        <p className="text-[10px] text-gray-500 font-mono uppercase mb-1">Encrypted Data:</p>
+                                                                        <code className="block text-[10px] text-red-400/80 font-mono break-all whitespace-normal bg-transparent">
+                                                                            {item.license_key}
+                                                                        </code>
+                                                                        <button 
+                                                                            onClick={() => { 
+                                                                                navigator.clipboard.writeText(item.license_key || ''); 
+                                                                                showToast("Debug info copied", "info");
+                                                                            }} 
+                                                                            className="absolute top-2 right-2 text-gray-500 hover:text-white"
+                                                                            title="Copy for Support"
+                                                                        >
+                                                                            <i className="fas fa-copy"></i>
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="bg-black/50 p-3 rounded-lg border border-primary/30 flex items-start justify-between font-mono text-primary tracking-widest relative">
+                                                                    <div className="flex-1 min-w-0 mr-4 max-h-24 overflow-y-auto custom-scrollbar break-all whitespace-normal">
+                                                                        <span className="text-xs md:text-sm select-all">{item.license_key}</span>
+                                                                    </div>
+                                                                    <button 
+                                                                        onClick={() => { 
+                                                                            navigator.clipboard.writeText(item.license_key || ''); 
+                                                                            showToast("Copied to clipboard!", "success");
+                                                                        }} 
+                                                                        className="text-gray-400 hover:text-white transition-colors p-2 bg-white/5 rounded-lg hover:bg-white/10 shrink-0"
+                                                                    >
+                                                                        <i className="fas fa-copy"></i>
+                                                                    </button>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))
+                                            );
+                                        })
                                     ))}
                                     {orders.every(o => o.line_items.every(i => !i.license_key)) && <p className="text-gray-500 text-center py-10">No active licenses found.</p>}
                                 </div>
