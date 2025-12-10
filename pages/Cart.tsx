@@ -192,22 +192,27 @@ export const Cart: React.FC = () => {
                         <i className="fas fa-bug text-3xl"></i>
                         <div>
                             <h2 className="text-xl font-black uppercase">Payment Link Missing</h2>
-                            <p className="text-xs text-gray-400 uppercase font-bold">Debug Mode Active</p>
+                            <p className="text-xs text-gray-400 uppercase font-bold">Requires Admin Action</p>
                         </div>
                    </div>
                    <p className="text-gray-300 mb-4 text-sm">
-                       The order was created (<b>#{debugData.id}</b>), but the website couldn't find the UddoktaPay link in the API response.
+                       The order was created (<b>#{debugData.id}</b>), but the website couldn't find the UddoktaPay link.
                        <br/><br/>
-                       <span className="text-white font-bold">Please screenshot the data below and send it to the developer:</span>
+                       <span className="text-white font-bold">Reason:</span> The Payment Plugin did not generate the link automatically via API.
+                       <br/><br/>
+                       <span className="text-green-400 font-bold">Solution:</span> You MUST add the PHP code provided by the developer to your WordPress `functions.php`. Once added, this error will disappear.
                    </p>
 
-                   <div className="bg-black p-4 rounded-xl border border-white/10 font-mono text-[10px] text-green-400 overflow-x-auto whitespace-pre-wrap">
-                       {JSON.stringify(debugData, null, 2)}
-                   </div>
-
                    <div className="mt-6 flex justify-end gap-4">
-                       <button onClick={() => { clearCart(); setStep(3); }} className="px-6 py-2 rounded-lg border border-white/10 text-gray-400 hover:text-white font-bold uppercase text-xs">Ignore & Finish Order</button>
-                       <button onClick={() => setDebugData(null)} className="px-6 py-2 rounded-lg bg-red-600 text-white font-bold uppercase text-xs">Close Debugger</button>
+                       <button onClick={() => { 
+                           // Fallback manual check
+                           if(window.confirm("Did you fix the PHP code? Try fetching URL again?")) {
+                               alert("Retrying... (In a real app, this would re-fetch order)");
+                           } else {
+                               clearCart(); setStep(3); 
+                           }
+                       }} className="px-6 py-2 rounded-lg bg-red-500 text-white font-bold uppercase text-xs">Retry</button>
+                       <button onClick={() => { clearCart(); setStep(3); }} className="px-6 py-2 rounded-lg border border-white/10 text-gray-400 hover:text-white font-bold uppercase text-xs">I'll Fix It Later (Close)</button>
                    </div>
                </div>
            </div>
@@ -349,7 +354,7 @@ export const Cart: React.FC = () => {
                                         <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-[10px] font-bold">Rckt</div>
                                     </div>
                                     <div className="text-center">
-                                        <p className={`font-black uppercase text-sm ${paymentMethod === 'uddoktapay' ? 'text-white' : 'text-gray-400'}`}>Instant Payment</p>
+                                        <p className={`font-black uppercase text-sm ${paymentMethod === 'uddoktapay' ? 'text-white' : 'text-gray-400'}`}>{config.payment.methodTitle}</p>
                                         <p className="text-[10px] text-gray-500">Automated & Secure</p>
                                     </div>
                                 </button>

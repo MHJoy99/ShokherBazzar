@@ -4,6 +4,9 @@ export const config = {
     siteDescription: "Bangladesh's #1 Digital Game Store. Buy Steam Wallet, Google Play, and Game Codes with bKash/Nagad.",
     currency: "৳",
     payment: {
+      // The Title shown in WordPress Admin Order List
+      methodTitle: "Bangladeshi Payment", 
+      
       // EDIT YOUR PERSONAL NUMBERS HERE
       bkashPersonal: "01983888331", 
       nagadPersonal: "01983888331", 

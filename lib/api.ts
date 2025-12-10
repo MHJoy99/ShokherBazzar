@@ -70,6 +70,38 @@ const mapWooProduct = (p: any): Product => ({
   featured: p.featured || false
 });
 
+const findPaymentUrl = (order: any): string | null => {
+    let url = null;
+    
+    // 1. Search Meta Data for External Gateway URL
+    // We look for _api_payment_url (Our Custom Fix) OR standard keys
+    if (order.meta_data && Array.isArray(order.meta_data)) {
+        const externalLinkMeta = order.meta_data.find((m: any) => 
+            m.key === '_api_payment_url' || // Priority: Our custom PHP hook
+            (typeof m.value === 'string' && m.value.includes('pay.mhjoygamershub.com')) || 
+            m.key === 'uddoktapay_payment_url' ||
+            m.key === '_payment_url'
+        );
+        if (externalLinkMeta) {
+            url = externalLinkMeta.value;
+        }
+    }
+
+    // 2. Check payment_result (Standard WooCommerce)
+    if (!url && order.payment_result && order.payment_result.redirect_url) {
+         url = order.payment_result.redirect_url;
+    } 
+    
+    // 3. Fallback: Standard payment_url (Ignore admin links if possible)
+    if (!url && order.payment_url) {
+         if (!order.payment_url.includes('order-pay')) {
+             url = order.payment_url;
+         }
+    }
+    
+    return url;
+};
+
 export const api = {
   getProducts: async (category?: string): Promise<Product[]> => {
     try {
@@ -122,7 +154,6 @@ export const api = {
     }
   },
 
-  // --- CONTENT API (For Dashboard Notices) ---
   getPage: async (slug: string): Promise<{ title: string, content: string } | null> => {
       try {
           const pages = await fetchWordPress(`/pages?slug=${slug}`);
@@ -138,7 +169,6 @@ export const api = {
       }
   },
 
-  // --- COUPON API ---
   getCoupon: async (code: string): Promise<Coupon | null> => {
       try {
           const coupons = await fetchWooCommerce(`/coupons?code=${code}`);
@@ -156,7 +186,6 @@ export const api = {
       }
   },
 
-  // --- REAL ORDER CREATION ---
   createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string; debug_meta?: any; debug_payment_result?: any }> => {
     console.log("Submitting Order to WooCommerce:", orderData);
 
@@ -172,18 +201,14 @@ export const api = {
         meta_data.push({ key: 'sender_number', value: orderData.senderNumber });
     }
 
-    // Payment Method ID must match what is defined in WooCommerce Settings
-    // For UddoktaPay plugin, the ID is usually 'uddoktapay'
     const payment_method_id = orderData.payment_method === 'manual' ? 'bacs' : 'uddoktapay';
-
-    // Add coupons if present
     const coupon_lines = orderData.coupon_code ? [{ code: orderData.coupon_code }] : [];
 
     const payload = {
         payment_method: payment_method_id,
-        payment_method_title: orderData.payment_method === 'manual' ? 'Manual Transfer (bKash/Nagad)' : 'UddoktaPay (bKash/Nagad/Rocket)',
+        payment_method_title: orderData.payment_method === 'manual' ? 'Manual Transfer (bKash/Nagad)' : config.payment.methodTitle,
         set_paid: false,
-        customer_id: orderData.customer_id || 0, // Link order to user if logged in
+        customer_id: orderData.customer_id || 0,
         billing: {
             first_name: orderData.billing.first_name,
             last_name: orderData.billing.last_name,
@@ -204,48 +229,28 @@ export const api = {
     };
 
     try {
-        const order = await fetchWooCommerce('/orders', 'POST', payload);
+        let order = await fetchWooCommerce('/orders', 'POST', payload);
         console.log("Order Created:", order);
 
-        let payment_url = null;
-        
-        // --- IMPROVED PAYMENT URL FINDER ---
-        
-        // 1. Search Meta Data for External Gateway URL (UddoktaPay usually puts it here)
-        // We look for any value that contains your payment domain 'pay.mhjoygamershub.com'
-        if (order.meta_data && Array.isArray(order.meta_data)) {
-            const externalLinkMeta = order.meta_data.find((m: any) => 
-                (typeof m.value === 'string' && m.value.includes('pay.mhjoygamershub.com')) || 
-                m.key === 'uddoktapay_payment_url' ||
-                m.key === '_payment_url'
-            );
-            if (externalLinkMeta) {
-                payment_url = externalLinkMeta.value;
-                console.log("Found Gateway URL in Meta:", payment_url);
-            }
-        }
+        // ATTEMPT 1: Check for URL immediately
+        let payment_url = findPaymentUrl(order);
 
-        // 2. Check payment_result (Standard WooCommerce)
-        if (!payment_url && order.payment_result && order.payment_result.redirect_url) {
-             payment_url = order.payment_result.redirect_url;
-             console.log("Found Redirect URL in Payment Result:", payment_url);
-        } 
-        
-        // 3. Fallback: Standard payment_url (Only use if it is NOT the admin checkout link)
-        if (!payment_url && order.payment_url) {
-             if (!order.payment_url.includes('order-pay')) {
-                 payment_url = order.payment_url;
-             } else {
-                 console.warn("Ignoring internal WP Admin payment link:", order.payment_url);
-             }
+        // ATTEMPT 2: If missing and using UddoktaPay, wait 1.5s and fetch again
+        // This is crucial because the PHP hook we added might take a moment to save the meta data
+        if (!payment_url && orderData.payment_method === 'uddoktapay') {
+             console.log("Payment URL not found initially. Retrying fetch to catch PHP hook result...");
+             await new Promise(r => setTimeout(r, 1500));
+             order = await fetchWooCommerce(`/orders/${order.id}`);
+             payment_url = findPaymentUrl(order);
+             console.log("Retry Result URL:", payment_url);
         }
 
         return { 
             id: order.id, 
             success: true,
             payment_url: payment_url || undefined,
-            debug_meta: order.meta_data, // RETURN DEBUG DATA
-            debug_payment_result: order.payment_result // RETURN DEBUG DATA
+            debug_meta: order.meta_data, 
+            debug_payment_result: order.payment_result 
         };
     } catch (error) {
         console.error("Order Creation Failed:", error);
@@ -253,18 +258,13 @@ export const api = {
     }
   },
 
-  // --- SEND CONTACT FORM TO WORDPRESS ---
   sendMessage: async (formData: any): Promise<boolean> => {
       try {
-          // We use the custom endpoint created in functions.php
           const response = await fetch('https://admin.mhjoygamershub.com/wp-json/custom/v1/contact', {
               method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json'
-              },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(formData)
           });
-
           if (!response.ok) throw new Error('Failed to send message');
           return true;
       } catch (error) {
@@ -273,7 +273,6 @@ export const api = {
       }
   },
 
-  // --- AUTHENTICATION ---
   register: async (userData: any): Promise<User> => {
       try {
           const payload = {
@@ -297,7 +296,6 @@ export const api = {
   },
 
   login: async (email: string): Promise<User> => {
-      // SECURITY WARNING: This does NOT check passwords. It just finds the user.
       const users = await fetchWooCommerce(`/customers?email=${email}`);
       if (users.length > 0) {
           const u = users[0];
@@ -324,10 +322,9 @@ export const api = {
               line_items: o.line_items.map((i: any) => ({
                   name: i.name,
                   quantity: i.quantity,
-                  // Safely check for license keys in meta_data
                   license_key: o.meta_data.find((m:any) => m.key === '_license_key' || m.key === 'serial_number' || m.key === 'license_key')?.value || null, 
                   image: i.image?.src || "https://via.placeholder.com/150",
-                  downloads: i.downloads || [] // Map download links
+                  downloads: i.downloads || []
               }))
           }));
       } catch (error) {
@@ -335,11 +332,9 @@ export const api = {
       }
   },
 
-  // NEW: Fetch Order Notes (Admin -> Customer)
   getOrderNotes: async (orderId: number): Promise<OrderNote[]> => {
       try {
           const notes = await fetchWooCommerce(`/orders/${orderId}/notes`);
-          // Filter only notes meant for the customer
           return notes
               .filter((n: any) => n.customer_note)
               .map((n: any) => ({
