@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -383,7 +384,7 @@ export const DashboardPage: React.FC = () => {
                                                                         <br />
                                                                         <span className="text-white font-bold text-[10px] opacity-50 block mt-1">Admin Info: Check functions.php decryption logic.</span>
                                                                     </p>
-                                                                    <div className="bg-black/50 rounded p-2 border border-white/5 relative">
+                                                                    <div className="bg-black/50 rounded p-2 border border-white/5 relative mb-3">
                                                                         <p className="text-[10px] text-gray-500 font-mono uppercase mb-1">Encrypted Data:</p>
                                                                         <code className="block text-[10px] text-red-400/80 font-mono break-all whitespace-normal bg-transparent">
                                                                             {item.license_key}
@@ -399,6 +400,12 @@ export const DashboardPage: React.FC = () => {
                                                                             <i className="fas fa-copy"></i>
                                                                         </button>
                                                                     </div>
+                                                                    <a 
+                                                                        href={`mailto:${config.contact.email}?subject=Decryption Error Order #${order.id}&body=My license key is showing as encrypted for Order #${order.id}.%0D%0A%0D%0AKey start: ${item.license_key?.substring(0, 20)}...`}
+                                                                        className="inline-block bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-bold px-3 py-2 rounded transition-colors"
+                                                                    >
+                                                                        <i className="fas fa-envelope mr-2"></i> Report Issue
+                                                                    </a>
                                                                 </div>
                                                             ) : (
                                                                 <div className="bg-black/50 p-3 rounded-lg border border-primary/30 flex items-start justify-between font-mono text-primary tracking-widest relative">
