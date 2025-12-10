@@ -335,15 +335,35 @@ export const DashboardPage: React.FC = () => {
                             ))}
                             {activeTab === 'orders' && orders.length === 0 && <p className="text-gray-500 text-center py-10">No orders found.</p>}
                             
+                            {/* DIGITAL VAULT WITH ORDER ID BADGES */}
                             {activeTab === 'keys' && (
                                 <div className="grid grid-cols-1 gap-6">
-                                    {orders.flatMap(o => o.line_items).filter(item => item.license_key).map((item, idx) => (
-                                        <div key={idx} className="bg-gradient-to-r from-dark-900 to-dark-950 border border-primary/30 p-6 rounded-xl relative overflow-hidden group">
-                                            <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-xl group-hover:bg-primary/20 transition-all"></div>
-                                            <div className="flex gap-6 items-start"><img src={item.image} className="w-16 h-20 object-cover rounded shadow-lg border border-white/10" alt="" /><div className="flex-1"><h3 className="text-white font-bold uppercase">{item.name}</h3><p className="text-gray-400 text-xs mb-4">Ready to Redeem</p><div className="bg-black/50 p-3 rounded-lg border border-primary/30 flex items-center justify-between font-mono text-primary tracking-widest relative"><span>{item.license_key}</span><button onClick={() => { navigator.clipboard.writeText(item.license_key || ''); alert('Copied!'); }} className="text-gray-400 hover:text-white transition-colors"><i className="fas fa-copy"></i></button></div></div></div>
-                                        </div>
+                                    {orders.map(order => (
+                                        order.line_items.filter(item => item.license_key).map((item, idx) => (
+                                            <div key={`${order.id}-${idx}`} className="bg-gradient-to-r from-dark-900 to-dark-950 border border-primary/30 p-6 rounded-xl relative overflow-hidden group">
+                                                <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-xl group-hover:bg-primary/20 transition-all"></div>
+                                                <div className="flex gap-6 items-start">
+                                                    <div className="w-16 h-20 bg-dark-950 rounded border border-white/10 shrink-0 overflow-hidden">
+                                                        <img src={item.image} className="w-full h-full object-cover" alt="" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <h3 className="text-white font-bold uppercase text-sm md:text-base truncate pr-4">{item.name}</h3>
+                                                            <span className="shrink-0 bg-white/10 text-gray-300 text-[10px] font-bold px-2 py-1 rounded border border-white/10">ORDER #{order.id}</span>
+                                                        </div>
+                                                        <p className="text-gray-400 text-xs mb-4">Ready to Redeem</p>
+                                                        <div className="bg-black/50 p-3 rounded-lg border border-primary/30 flex items-center justify-between font-mono text-primary tracking-widest relative">
+                                                            <span className="text-xs md:text-sm break-all mr-2">{item.license_key}</span>
+                                                            <button onClick={() => { navigator.clipboard.writeText(item.license_key || ''); alert('Copied!'); }} className="text-gray-400 hover:text-white transition-colors">
+                                                                <i className="fas fa-copy"></i>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
                                     ))}
-                                    {orders.every(o => !o.line_items.some(i => i.license_key)) && <p className="text-gray-500 text-center py-10">No active licenses found.</p>}
+                                    {orders.every(o => o.line_items.every(i => !i.license_key)) && <p className="text-gray-500 text-center py-10">No active licenses found.</p>}
                                 </div>
                             )}
                             
