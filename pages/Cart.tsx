@@ -51,7 +51,8 @@ export const Cart: React.FC = () => {
           // SAFETY LOCK: Run verification exactly ONCE to prevent loops
           if (!verificationRun.current && finalId > 0) {
               verificationRun.current = true;
-              api.verifyPayment(finalId);
+              // Pass both Order ID and Invoice ID for robust verification
+              api.verifyPayment(finalId, invoice || undefined);
           }
       }
   }, [searchParams, clearCart]);
@@ -171,7 +172,7 @@ export const Cart: React.FC = () => {
           <div className="absolute top-0 left-0 w-full h-1 bg-primary shadow-glow"></div>
           <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/20"><i className="fas fa-check text-4xl text-primary"></i></div>
           <h2 className="text-3xl font-black text-white mb-2 uppercase italic">Order Completed!</h2>
-          <div className="bg-dark-950 p-4 rounded-xl mb-6 border border-white/10">
+          <div className="bg-dark-900 p-4 rounded-xl mb-6 border border-white/10">
               <p className="text-gray-500 text-xs font-bold uppercase">Order Number</p>
               <p className="text-2xl font-black text-white tracking-widest">#{orderId}</p>
           </div>

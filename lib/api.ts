@@ -136,7 +136,6 @@ export const api = {
       } catch (e) { return null; }
   },
 
-  // 🚀 OFFICIAL DIRECT PAYMENT STRATEGY
   createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string }> => {
     const line_items = orderData.items.map((item: any) => ({
         product_id: item.id,
@@ -206,8 +205,8 @@ export const api = {
     }
   },
 
-  // TRIGGER BACKEND STATUS UPDATE (Delayed & Safe)
-  verifyPayment: async (orderId: number): Promise<boolean> => {
+  // TRIGGER BACKEND STATUS UPDATE (Updated with Invoice ID support)
+  verifyPayment: async (orderId: number, invoiceId?: string): Promise<boolean> => {
       // Small delay to allow Gateway to update their DB first
       await new Promise(r => setTimeout(r, 1500));
       
@@ -215,13 +214,23 @@ export const api = {
           const res = await fetch(`${CUSTOM_API_URL}/verify-payment`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ order_id: orderId })
+              body: JSON.stringify({ order_id: orderId, invoice_id: invoiceId })
           });
-          // If 404 (endpoint missing on server), ignore it.
+          
           if (res.status === 404) return false;
+          
+          const data = await res.json();
+          // If verification fails but we know it's a success return, we send an emergency email
+          if (data.status !== 'verified' && data.status !== 'already_paid') {
+               await api.sendMessage({
+                   name: "System Alert",
+                   email: "admin@mhjoygamershub.com",
+                   message: `Urgent: Order #${orderId} (Invoice ${invoiceId}) returned SUCCESS but API verification failed. Please check UddoktaPay manually.`
+               });
+          }
+          
           return res.ok;
       } catch (e) {
-          // Fail silently to avoid interrupting UI
           return false;
       }
   },
