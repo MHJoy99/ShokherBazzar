@@ -148,7 +148,6 @@ const OrderRow: React.FC<{ order: Order }> = ({ order }) => {
         setExpanded(!expanded);
     };
     
-    // Safety check for empty items array
     if (!order.line_items || order.line_items.length === 0) return null;
 
     return (
@@ -234,17 +233,35 @@ const OrderRow: React.FC<{ order: Order }> = ({ order }) => {
                     {/* 3. Items Table */}
                     <div>
                          <h4 className="text-gray-400 font-bold uppercase text-xs mb-3">Order Items</h4>
-                         {order.line_items.map((item, idx) => (
-                             <div key={idx} className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
-                                 <span className="text-gray-300">{item.name} x{item.quantity}</span>
-                                 {/* Show key immediately if present here */}
-                                 {item.license_key && (
-                                     <span className="font-mono text-primary bg-primary/10 px-2 py-1 rounded select-all break-all max-w-[200px] truncate">
-                                         {item.license_key}
-                                     </span>
-                                 )}
-                             </div>
-                         ))}
+                         {order.line_items.map((item, idx) => {
+                             const isEncrypted = item.license_key && item.license_key.startsWith('def50');
+                             
+                             return (
+                                <div key={idx} className="flex flex-col gap-2 py-3 border-b border-white/5 last:border-0">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-300">{item.name} x{item.quantity}</span>
+                                    </div>
+                                    
+                                    {/* License Key Display Logic */}
+                                    {item.license_key && (
+                                        <div className="mt-1">
+                                            {isEncrypted ? (
+                                                <div className="bg-red-500/5 border border-red-500/20 p-2 rounded flex items-center gap-2">
+                                                    <i className="fas fa-lock text-red-500"></i>
+                                                    <span className="text-red-400 text-xs font-bold uppercase">Decryption Failed</span>
+                                                    <span className="text-gray-500 text-[10px]">Contact support</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2 bg-black/40 p-2 rounded border border-primary/20">
+                                                    <span className="font-mono text-primary text-xs select-all break-all">{item.license_key}</span>
+                                                    <button onClick={() => navigator.clipboard.writeText(item.license_key || '')} className="text-gray-500 hover:text-white"><i className="fas fa-copy"></i></button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                             );
+                         })}
                     </div>
                 </div>
             )}
@@ -382,7 +399,7 @@ export const DashboardPage: React.FC = () => {
                                         order.line_items.filter(item => item.license_key).map((item, idx) => {
                                             const keyStr = item.license_key || '';
                                             const isEncrypted = keyStr.startsWith('def50'); 
-                                            
+
                                             return (
                                                 <div key={`${order.id}-${idx}`} className="bg-gradient-to-r from-dark-900 to-dark-950 border border-primary/30 p-6 rounded-xl relative overflow-hidden group">
                                                     <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-xl group-hover:bg-primary/20 transition-all"></div>
@@ -401,13 +418,13 @@ export const DashboardPage: React.FC = () => {
                                                                 <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
                                                                     <div className="flex items-center gap-2 mb-2">
                                                                         <i className="fas fa-exclamation-triangle text-red-500 animate-pulse"></i>
-                                                                        <span className="text-red-400 font-bold text-xs uppercase tracking-wider">Processing Encryption</span>
+                                                                        <span className="text-red-400 font-bold text-xs uppercase tracking-wider">Decryption Failed</span>
                                                                     </div>
                                                                     <p className="text-gray-400 text-[11px] leading-relaxed mb-3">
-                                                                        Your key is securely stored but waiting for decryption. Please wait or contact support.
+                                                                        Server reported encrypted key. Please contact support.
                                                                     </p>
                                                                     <a 
-                                                                        href={`mailto:${config.contact.email}?subject=Decryption Error Order #${order.id}&body=My license key is showing as encrypted for Order #${order.id}.`}
+                                                                        href={`mailto:${config.contact.email}?subject=Decryption Error Order #${order.id}&body=My license key is showing as encrypted/invalid for Order #${order.id}.`}
                                                                         className="inline-block bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-bold px-3 py-2 rounded transition-colors"
                                                                     >
                                                                         <i className="fas fa-envelope mr-2"></i> Report Issue
@@ -416,11 +433,11 @@ export const DashboardPage: React.FC = () => {
                                                             ) : (
                                                                 <div className="bg-black/50 p-3 rounded-lg border border-primary/30 flex items-start justify-between font-mono text-primary tracking-widest relative">
                                                                     <div className="flex-1 min-w-0 mr-4 max-h-24 overflow-y-auto custom-scrollbar break-all whitespace-normal">
-                                                                        <span className="text-xs md:text-sm select-all">{item.license_key}</span>
+                                                                        <span className="text-xs md:text-sm select-all">{keyStr}</span>
                                                                     </div>
                                                                     <button 
                                                                         onClick={() => { 
-                                                                            navigator.clipboard.writeText(item.license_key || ''); 
+                                                                            navigator.clipboard.writeText(keyStr); 
                                                                             showToast("Copied!", "success");
                                                                         }} 
                                                                         className="text-gray-400 hover:text-white transition-colors p-2 bg-white/5 rounded-lg hover:bg-white/10 shrink-0"

@@ -12,6 +12,7 @@ export const TrackOrder: React.FC = () => {
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [showLogs, setShowLogs] = useState<number | null>(null);
     const { showToast } = useToast();
 
     const handleTrack = async (e: React.FormEvent) => {
@@ -85,7 +86,7 @@ export const TrackOrder: React.FC = () => {
                         </div>
 
                         <div className="space-y-6">
-                            {order.line_items.map((item, idx) => (
+                            {order.line_items.map((item: any, idx: number) => (
                                 <div key={idx} className="bg-dark-950 border border-white/10 rounded-xl p-6">
                                     <div className="flex gap-6 items-start">
                                         <div className="w-16 h-20 bg-dark-900 rounded border border-white/5 shrink-0 overflow-hidden">
@@ -108,8 +109,33 @@ export const TrackOrder: React.FC = () => {
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 p-3 rounded text-xs font-bold">
-                                                    Status: {order.status.toUpperCase()} - Key not yet available.
+                                                <div className="space-y-3">
+                                                    <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 p-3 rounded text-xs font-bold">
+                                                        Status: {order.status.toUpperCase()} - Key not yet available.
+                                                    </div>
+                                                    
+                                                    {/* DEBUG TOGGLE */}
+                                                    {item.debug_log && item.debug_log.length > 0 && (
+                                                        <div className="mt-2">
+                                                            <button 
+                                                                onClick={() => setShowLogs(showLogs === idx ? null : idx)} 
+                                                                className="text-[10px] uppercase font-bold text-gray-600 hover:text-white flex items-center gap-2"
+                                                            >
+                                                                <i className="fas fa-bug"></i> {showLogs === idx ? 'Hide Debug Logs' : 'Show Debug Logs'}
+                                                            </button>
+                                                            
+                                                            {showLogs === idx && (
+                                                                <div className="mt-2 bg-black p-4 rounded-lg font-mono text-[10px] text-green-400 h-48 overflow-y-auto border border-gray-800">
+                                                                    {item.debug_log.map((log: string, i: number) => (
+                                                                        <div key={i} className="border-b border-gray-900 pb-1 mb-1 last:border-0">
+                                                                            <span className="text-gray-500 mr-2">[{i+1}]</span>
+                                                                            {log}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>

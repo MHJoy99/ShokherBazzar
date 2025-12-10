@@ -1,3 +1,4 @@
+
 import { Product, Category, Order, User, OrderNote, Coupon } from '../types';
 import { config } from '../config';
 
@@ -158,8 +159,8 @@ export const api = {
         line_items,
         coupon_lines,
         meta_data,
-        trxId: orderData.trxId, // Pass explicitly for PHP handler
-        senderNumber: orderData.senderNumber, // Pass explicitly for PHP handler
+        trxId: orderData.trxId, 
+        senderNumber: orderData.senderNumber, 
         customer_note: orderData.payment_method === 'manual' ? `TrxID: ${orderData.trxId}` : "Headless Order"
     };
 
@@ -206,9 +207,7 @@ export const api = {
     }
   },
 
-  // TRIGGER BACKEND STATUS UPDATE (Updated with Invoice ID support)
   verifyPayment: async (orderId: number, invoiceId?: string): Promise<boolean> => {
-      // Small delay to allow Gateway to update their DB first
       await new Promise(r => setTimeout(r, 1500));
       
       try {
@@ -219,9 +218,7 @@ export const api = {
           });
           
           if (res.status === 404) return false;
-          
           const data = await res.json();
-          // If verification fails but we know it's a success return, we send an emergency email
           if (data.status !== 'verified' && data.status !== 'already_paid') {
                await api.sendMessage({
                    name: "System Alert",
@@ -229,7 +226,6 @@ export const api = {
                    message: `Urgent: Order #${orderId} (Invoice ${invoiceId}) returned SUCCESS but API verification failed. Please check UddoktaPay manually.`
                });
           }
-          
           return res.ok;
       } catch (e) {
           return false;
@@ -312,7 +308,6 @@ export const api = {
 
   getUserOrders: async (userId: number): Promise<Order[]> => {
       try {
-          // SWITCH TO CUSTOM ENDPOINT FOR RELIABLE DECRYPTION
           const response = await fetch(`${CUSTOM_API_URL}/my-orders`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -323,7 +318,6 @@ export const api = {
           
           const orders = await response.json();
 
-          // Map the simplified custom response to our App's Order type
           return orders.map((o: any) => ({
               id: o.id,
               status: o.status,
@@ -334,10 +328,10 @@ export const api = {
               line_items: o.items.map((i: any) => ({
                   name: i.name,
                   quantity: i.quantity,
-                  // The custom endpoint returns 'license_keys' as an array of decrypted strings
                   license_key: i.license_keys && i.license_keys.length > 0 ? i.license_keys.join(' | ') : null,
                   image: i.image,
-                  downloads: []
+                  downloads: [],
+                  debug_log: i.debug_log || [] // Capture server logs
               }))
           }));
       } catch (error) { 
@@ -346,7 +340,6 @@ export const api = {
       }
   },
 
-  // NEW: GUEST TRACKING API
   trackOrder: async (orderId: string, email: string): Promise<Order | null> => {
       try {
           const response = await fetch(`${CUSTOM_API_URL}/track-order`, {
@@ -370,7 +363,8 @@ export const api = {
                   quantity: i.quantity,
                   license_key: i.license_keys && i.license_keys.length > 0 ? i.license_keys.join(' | ') : null,
                   image: i.image,
-                  downloads: []
+                  downloads: [],
+                  debug_log: i.debug_log || [] // Capture server logs
               }))
           };
       } catch (e) {
