@@ -26,7 +26,7 @@ export const Footer: React.FC = () => (
                <h4 className="text-white font-bold uppercase tracking-widest mb-6 border-l-2 border-primary pl-3">My Account</h4>
                <ul className="space-y-3 text-sm text-gray-400">
                   <li><Link to="/cart" className="hover:text-primary transition-colors">My Cart</Link></li>
-                  <li><Link to="/contact" className="hover:text-primary transition-colors">Order Tracking</Link></li>
+                  <li><Link to="/track-order" className="hover:text-primary transition-colors font-bold text-white">Track Guest Order</Link></li>
                   <li><Link to="/dashboard" className="hover:text-primary transition-colors">My Codes</Link></li>
                   <li><Link to="/login" className="hover:text-primary transition-colors">Login / Register</Link></li>
                </ul>

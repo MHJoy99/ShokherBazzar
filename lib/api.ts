@@ -1,5 +1,3 @@
-
-
 import { Product, Category, Order, User, OrderNote, Coupon } from '../types';
 import { config } from '../config';
 
@@ -296,7 +294,6 @@ export const api = {
       } catch (e) { return false; }
   },
 
-  // NEW: Fetch Fresh Profile (User Sync)
   getProfileSync: async (email: string): Promise<User | null> => {
       try {
           const response = await fetch(`${CUSTOM_API_URL}/get-profile`, {
@@ -346,6 +343,38 @@ export const api = {
       } catch (error) { 
           console.error("Order Fetch Error:", error);
           return []; 
+      }
+  },
+
+  // NEW: GUEST TRACKING API
+  trackOrder: async (orderId: string, email: string): Promise<Order | null> => {
+      try {
+          const response = await fetch(`${CUSTOM_API_URL}/track-order`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ order_id: orderId, email: email })
+          });
+
+          if (!response.ok) return null;
+
+          const o = await response.json();
+          return {
+              id: o.id,
+              status: o.status,
+              total: o.total,
+              currency_symbol: '৳',
+              date_created: o.date_created,
+              customer_note: "",
+              line_items: o.items.map((i: any) => ({
+                  name: i.name,
+                  quantity: i.quantity,
+                  license_key: i.license_keys && i.license_keys.length > 0 ? i.license_keys.join(' | ') : null,
+                  image: i.image,
+                  downloads: []
+              }))
+          };
+      } catch (e) {
+          return null;
       }
   },
 
