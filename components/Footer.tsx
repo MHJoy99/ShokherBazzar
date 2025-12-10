@@ -10,7 +10,7 @@ export const Footer: React.FC = () => (
             <div className="space-y-6">
                 <Link to="/" className="flex items-center gap-2">
                     <i className="fas fa-gamepad text-primary text-3xl"></i>
-                    <span className="text-2xl font-black text-white italic tracking-tighter">STEAM<span className="text-primary">BAZAAR</span></span>
+                    <span className="text-2xl font-black text-white italic tracking-tighter">MHJOY<span className="text-primary">GAMERSHUB</span></span>
                 </Link>
                 <p className="text-gray-400 text-sm leading-relaxed">
                     Bangladesh's most trusted digital marketplace for gamers. 
@@ -55,7 +55,7 @@ export const Footer: React.FC = () => (
          </div>
          <div className="border-t border-white/5 pt-8 pb-8 flex flex-col md:flex-row items-center justify-between gap-4">
              <p className="text-gray-600 text-xs">
-                 &copy; 2024 Steam Bazaar. All trademarks are property of their respective owners.
+                 &copy; 2024 MHJoyGamersHub. All trademarks are property of their respective owners.
              </p>
              <div className="flex items-center gap-2">
                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>

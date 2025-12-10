@@ -11,6 +11,7 @@ import { CartProvider } from './context/CartContext';
 import { ToastProvider } from './context/ToastContext';
 import { SkeletonHero } from './components/Skeleton';
 import { WhatsAppFloat } from './components/WhatsAppFloat';
+import { ScrollToTop } from './components/ScrollToTop';
 
 // Lazy Load Pages to reduce bundle size
 const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
@@ -64,6 +65,7 @@ const App: React.FC = () => {
         <AuthProvider>
             <CartProvider>
                 <Router>
+                <ScrollToTop />
                 <Layout>
                     <Suspense fallback={<PageLoader />}>
                         <Routes>

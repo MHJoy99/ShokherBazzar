@@ -1,6 +1,6 @@
 
 export const config = {
-    siteName: "Steam Bazaar",
+    siteName: "MHJoyGamersHub",
     siteDescription: "Bangladesh's #1 Digital Game Store. Buy Steam Wallet, Google Play, and Game Codes with bKash/Nagad.",
     currency: "৳",
     payment: {

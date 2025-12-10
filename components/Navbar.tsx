@@ -110,7 +110,7 @@ export const Navbar: React.FC = () => {
                 <i className="fas fa-gamepad text-black text-2xl"></i>
               </div>
               <div className="hidden sm:block">
-                  <h1 className="text-xl font-black text-white italic tracking-tighter leading-none">STEAM<span className="text-primary">BAZAAR</span></h1>
+                  <h1 className="text-xl font-black text-white italic tracking-tighter leading-none">MHJOY<span className="text-primary">GAMERSHUB</span></h1>
                   <p className="text-[9px] text-gray-400 uppercase tracking-widest">Digital Store</p>
               </div>
            </Link>
