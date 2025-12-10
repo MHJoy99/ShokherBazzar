@@ -13,7 +13,7 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
   return (
     <motion.div whileHover={{ y: -8 }} className="bg-dark-900 rounded-xl overflow-hidden border border-white/5 hover:border-primary/50 transition-all group h-full flex flex-col shadow-lg hover:shadow-glow-sm">
        <Link 
-         to={`/product/${product.id}`} 
+         to={`/product/${product.slug}`} 
          state={{ preload: product }} // OPTIMISTIC UI: Pass data immediately
          className="relative block aspect-[3/4] bg-dark-950 overflow-hidden"
        >
@@ -48,7 +48,7 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
                 <button 
                     onClick={(e) => {
                         e.preventDefault(); 
-                        isVar ? window.location.href=`#/product/${product.id}` : addToCart(product);
+                        isVar ? window.location.href=`#/product/${product.slug}` : addToCart(product);
                     }} 
                     className="w-10 h-10 rounded-xl bg-white/5 hover:bg-primary hover:text-black text-white flex items-center justify-center transition-all shadow-lg active:scale-95"
                 >

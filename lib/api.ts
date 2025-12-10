@@ -83,14 +83,31 @@ export const api = {
       return [];
     }
   },
-  getProduct: async (id: number): Promise<Product | undefined> => {
+  getProduct: async (idOrSlug: string | number): Promise<Product | undefined> => {
     try {
-      const data = await fetchWooCommerce(`/products/${id}`);
+      let data;
+      // Determine if the input is an ID (number) or Slug (string)
+      // Check for pure numeric string to handle backward compatibility of old links
+      const isId = typeof idOrSlug === 'number' || /^\d+$/.test(String(idOrSlug));
+
+      if (isId) {
+          // Fetch by ID
+          data = await fetchWooCommerce(`/products/${idOrSlug}`);
+      } else {
+          // Fetch by Slug (returns array)
+          const results = await fetchWooCommerce(`/products?slug=${idOrSlug}`);
+          if (results.length > 0) {
+              data = results[0];
+          } else {
+              return undefined;
+          }
+      }
+
       const product = mapWooProduct(data);
       if (data.type === 'variable') {
           try {
              // INCREASED LIMIT TO 100 TO FIX MISSING VARIATIONS
-             const variationsData = await fetchWooCommerce(`/products/${id}/variations?per_page=100`);
+             const variationsData = await fetchWooCommerce(`/products/${data.id}/variations?per_page=100`);
              
              product.variations = variationsData.map((v: any) => ({
                  id: v.id,

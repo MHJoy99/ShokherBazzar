@@ -37,16 +37,16 @@ export const Navbar: React.FC = () => {
           e.preventDefault();
           if (searchResults.length > 0) {
               // Navigate to the first result
-              handleNavigate(searchResults[0].id);
+              handleNavigate(searchResults[0].slug);
           }
       }
   };
 
-  const handleNavigate = (id: number) => {
+  const handleNavigate = (slug: string) => {
       setSearchResults([]); 
       setSearchQuery(''); 
       setIsMobileSearchOpen(false); 
-      navigate(`/product/${id}`);
+      navigate(`/product/${slug}`);
   };
 
   // Close search results when clicking outside
@@ -185,9 +185,9 @@ export const Navbar: React.FC = () => {
                   >
                       {searchResults.map(p => (
                           <Link 
-                            to={`/product/${p.id}`}
+                            to={`/product/${p.slug}`}
                             key={p.id} 
-                            onClick={() => handleNavigate(p.id)} 
+                            onClick={() => handleNavigate(p.slug)} 
                             className="p-3 hover:bg-white/5 cursor-pointer flex gap-4 text-white border-b border-white/5 last:border-0 group"
                           >
                              <img src={p.images[0].src} className="w-12 h-12 rounded-lg object-cover" alt="" />
@@ -262,7 +262,7 @@ export const Navbar: React.FC = () => {
                             />
                             <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
                             {searchResults.length > 0 && (
-                                <button onClick={() => handleNavigate(searchResults[0].id)} className="absolute right-3 top-1/2 -translate-y-1/2 text-primary font-bold text-xs uppercase bg-white/10 px-2 py-1 rounded">
+                                <button onClick={() => handleNavigate(searchResults[0].slug)} className="absolute right-3 top-1/2 -translate-y-1/2 text-primary font-bold text-xs uppercase bg-white/10 px-2 py-1 rounded">
                                     GO <i className="fas fa-arrow-right ml-1"></i>
                                 </button>
                             )}
@@ -273,9 +273,9 @@ export const Navbar: React.FC = () => {
                             <div className="mt-4 bg-dark-900 border border-white/10 rounded-xl overflow-hidden shadow-2xl max-h-[60vh] overflow-y-auto">
                                 {searchResults.map(p => (
                                     <Link 
-                                        to={`/product/${p.id}`}
+                                        to={`/product/${p.slug}`}
                                         key={p.id} 
-                                        onClick={() => handleNavigate(p.id)} 
+                                        onClick={() => handleNavigate(p.slug)} 
                                         className="p-3 border-b border-white/5 flex gap-4 text-white active:bg-white/10"
                                     >
                                         <img src={p.images[0].src} className="w-12 h-12 rounded object-cover" alt="" />

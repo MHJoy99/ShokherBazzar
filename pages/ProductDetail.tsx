@@ -12,7 +12,7 @@ import { config } from '../config';
 import { SkeletonCard } from '../components/Skeleton';
 
 export const ProductDetail: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const preload = location.state?.preload as Product | undefined;
@@ -34,20 +34,20 @@ export const ProductDetail: React.FC = () => {
 
   useEffect(() => {
     const fetchProductData = async () => {
-      if (!id) return;
+      if (!slug) return;
       
       setLoadingRelated(true);
       if (!product) {
           setLoadingMain(true);
       }
       
-      // Reset sidebar data when ID changes
+      // Reset sidebar data when ID/Slug changes
       setRelatedProducts([]);
       setSuggestedProducts([]);
       window.scrollTo(0, 0);
 
       // 2. MAIN FETCH: Get only the product details first
-      const data = await api.getProduct(parseInt(id));
+      const data = await api.getProduct(slug);
       setProduct(data || null);
       if (data?.variations && data.variations.length > 0) setSelectedVariation(data.variations[0]);
       
@@ -89,7 +89,7 @@ export const ProductDetail: React.FC = () => {
       }
     };
     fetchProductData();
-  }, [id]);
+  }, [slug]);
 
   if (loadingMain) return <div className="min-h-screen bg-dark-950 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary shadow-glow"></div></div>;
   if (!product) return <div className="min-h-screen flex items-center justify-center text-white">Product not found</div>;
@@ -355,7 +355,7 @@ export const ProductDetail: React.FC = () => {
                     ) : relatedProducts.length > 0 ? (
                         <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
                             {relatedProducts.map(p => (
-                                <Link to={`/product/${p.id}`} key={p.id} className="flex items-center gap-3 p-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 group">
+                                <Link to={`/product/${p.slug}`} key={p.id} className="flex items-center gap-3 p-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 group">
                                     <div className="w-10 h-10 rounded overflow-hidden bg-dark-950 border border-white/10 shrink-0">
                                             <img src={p.images[0].src} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt="" />
                                     </div>

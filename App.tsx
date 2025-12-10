@@ -66,7 +66,7 @@ const App: React.FC = () => {
                     <Suspense fallback={<PageLoader />}>
                         <Routes>
                             <Route path="/" element={<Home />} />
-                            <Route path="/product/:id" element={<ProductDetail />} />
+                            <Route path="/product/:slug" element={<ProductDetail />} />
                             <Route path="/category/:slug" element={<CategoryPage />} />
                             <Route path="/cart" element={<Cart />} />
                             <Route path="/admin" element={<Admin />} />

@@ -76,7 +76,7 @@ export const Hero: React.FC<{ products: Product[] }> = ({ products }) => {
                      className="flex flex-wrap items-center gap-4 pt-4"
                   >
                       <Link 
-                        to={`/product/${product.id}`} 
+                        to={`/product/${product.slug}`} 
                         className="bg-primary hover:bg-cyan-400 text-black text-base md:text-lg font-black py-3 md:py-4 px-8 md:px-10 rounded-xl shadow-glow hover:scale-105 transition-all flex items-center gap-3 uppercase italic"
                       >
                          <span>Buy Now</span>
