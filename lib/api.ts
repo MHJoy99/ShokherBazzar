@@ -295,59 +295,38 @@ export const api = {
 
   getUserOrders: async (userId: number): Promise<Order[]> => {
       try {
-          const orders = await fetchWooCommerce(`/orders?customer=${userId}`);
+          // SWITCH TO CUSTOM ENDPOINT FOR RELIABLE DECRYPTION
+          const response = await fetch(`${CUSTOM_API_URL}/my-orders`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user_id: userId })
+          });
+          
+          if (!response.ok) throw new Error("Failed to fetch orders");
+          
+          const orders = await response.json();
+
+          // Map the simplified custom response to our App's Order type
           return orders.map((o: any) => ({
               id: o.id,
               status: o.status,
               total: o.total,
-              currency_symbol: o.currency_symbol,
-              date_created: new Date(o.date_created).toLocaleDateString(),
+              currency_symbol: '৳',
+              date_created: o.date_created,
               customer_note: o.customer_note || "",
-              line_items: o.line_items.map((i: any) => {
-                  // ROBUST LICENSE KEY FINDER
-                  let keys: string[] = [];
-                  
-                  // 1. Check PHP exposed keys (Primary)
-                  if (i.exposed_license_keys && Array.isArray(i.exposed_license_keys) && i.exposed_license_keys.length > 0) {
-                      keys.push(...i.exposed_license_keys);
-                  }
-                  
-                  // 2. Check Standard Item Meta (Secondary)
-                  if (i.meta_data && Array.isArray(i.meta_data)) {
-                      i.meta_data.forEach((m: any) => {
-                          const k = m.key.toLowerCase();
-                          // Look for common keywords in keys like 'License Code', 'Serial', etc
-                          if (k.includes('license') || k.includes('serial') || k.includes('code') || k.includes('pin') || k.includes('key')) {
-                              // Avoid duplicating internal keys if they leak
-                              if (!k.startsWith('_')) keys.push(`${m.display_key || m.key}: ${m.value}`);
-                          }
-                      });
-                  }
-
-                  // 3. Fallback: Check Order-level Meta (For manual entry)
-                  if (keys.length === 0 && o.meta_data && Array.isArray(o.meta_data)) {
-                       o.meta_data.forEach((m: any) => {
-                          const k = m.key.toLowerCase();
-                          // Specific manual keys
-                          if (k === 'license' || k === 'serial' || k === 'key' || k === 'code' || k === '_license_key') {
-                              keys.push(m.value);
-                          }
-                      });
-                  }
-
-                  // Deduplicate and Join
-                  const uniqueKeys = Array.from(new Set(keys));
-
-                  return {
-                      name: i.name,
-                      quantity: i.quantity,
-                      license_key: uniqueKeys.length > 0 ? uniqueKeys.join(' | ') : null,
-                      image: i.image?.src || "https://via.placeholder.com/150",
-                      downloads: i.downloads || []
-                  };
-              })
+              line_items: o.items.map((i: any) => ({
+                  name: i.name,
+                  quantity: i.quantity,
+                  // The custom endpoint returns 'license_keys' as an array of decrypted strings
+                  license_key: i.license_keys && i.license_keys.length > 0 ? i.license_keys.join(' | ') : null,
+                  image: i.image,
+                  downloads: []
+              }))
           }));
-      } catch (error) { return []; }
+      } catch (error) { 
+          console.error("Order Fetch Error:", error);
+          return []; 
+      }
   },
 
   getOrderNotes: async (orderId: number): Promise<OrderNote[]> => {

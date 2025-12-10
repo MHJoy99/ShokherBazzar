@@ -146,6 +146,9 @@ const OrderRow: React.FC<{ order: Order }> = ({ order }) => {
         }
         setExpanded(!expanded);
     };
+    
+    // Safety check for empty items array
+    if (!order.line_items || order.line_items.length === 0) return null;
 
     return (
         <div className="bg-dark-900 border border-white/5 rounded-xl overflow-hidden transition-colors hover:border-white/20">
@@ -160,7 +163,7 @@ const OrderRow: React.FC<{ order: Order }> = ({ order }) => {
                     </div>
                     <div>
                         <p className="text-white font-bold text-sm">
-                            {order.line_items[0]?.name || 'Unknown Item'} {order.line_items.length > 1 && `+ ${order.line_items.length - 1} more`}
+                            {order.line_items[0]?.name || 'Order Item'} {order.line_items.length > 1 && `+ ${order.line_items.length - 1} more`}
                         </p>
                         <p className="text-gray-500 text-xs">{order.date_created}</p>
                     </div>
@@ -269,10 +272,13 @@ export const DashboardPage: React.FC = () => {
             setOrders(data);
         } catch(e) {
             console.error(e);
+            // On error, orders stays empty or whatever it was
+            setOrders([]);
+            showToast("Connection issue: Could not fetch orders.", "error");
         } finally {
             setLoading(false);
         }
-    }, [user]);
+    }, [user, showToast]);
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -338,7 +344,7 @@ export const DashboardPage: React.FC = () => {
                     <div className="flex items-center justify-between mb-8 border-l-4 border-primary pl-4">
                          <h1 className="text-3xl font-black text-white uppercase italic">{activeTab === 'orders' ? 'Order History' : activeTab === 'keys' ? 'Digital Vault' : 'Profile Settings'}</h1>
                          {(activeTab === 'orders' || activeTab === 'keys') && (
-                             <button onClick={fetchOrders} className="w-8 h-8 rounded-full bg-white/5 hover:bg-primary hover:text-black flex items-center justify-center transition-colors" title="Refresh Orders">
+                             <button onClick={fetchOrders} disabled={loading} className="w-8 h-8 rounded-full bg-white/5 hover:bg-primary hover:text-black flex items-center justify-center transition-colors" title="Refresh Orders">
                                  <i className={`fas fa-sync ${loading ? 'animate-spin' : ''}`}></i>
                              </button>
                          )}
@@ -350,7 +356,14 @@ export const DashboardPage: React.FC = () => {
                             {activeTab === 'orders' && orders.map(order => (
                                 <OrderRow key={order.id} order={order} />
                             ))}
-                            {activeTab === 'orders' && orders.length === 0 && <p className="text-gray-500 text-center py-10">No orders found.</p>}
+                            {activeTab === 'orders' && orders.length === 0 && (
+                                <div className="text-center py-12 bg-dark-900/50 rounded-xl border border-white/5">
+                                    <i className="fas fa-shopping-basket text-4xl text-gray-600 mb-4"></i>
+                                    <p className="text-gray-400 font-bold mb-2">No orders found.</p>
+                                    <p className="text-gray-500 text-sm">If you recently made a purchase, please wait a moment and refresh.</p>
+                                    <button onClick={fetchOrders} className="mt-4 text-primary text-xs font-bold uppercase hover:underline">Reload Order List</button>
+                                </div>
+                            )}
                             
                             {/* DIGITAL VAULT WITH ORDER ID BADGES */}
                             {activeTab === 'keys' && (
@@ -381,8 +394,6 @@ export const DashboardPage: React.FC = () => {
                                                                     </div>
                                                                     <p className="text-gray-400 text-[11px] leading-relaxed mb-3">
                                                                         License key is pending decryption. Please contact support if this persists.
-                                                                        <br />
-                                                                        <span className="text-white font-bold text-[10px] opacity-50 block mt-1">Admin Info: Check functions.php decryption logic.</span>
                                                                     </p>
                                                                     <div className="bg-black/50 rounded p-2 border border-white/5 relative mb-3">
                                                                         <p className="text-[10px] text-gray-500 font-mono uppercase mb-1">Encrypted Data:</p>
@@ -429,7 +440,12 @@ export const DashboardPage: React.FC = () => {
                                             );
                                         })
                                     ))}
-                                    {orders.every(o => o.line_items.every(i => !i.license_key)) && <p className="text-gray-500 text-center py-10">No active licenses found.</p>}
+                                    {orders.every(o => o.line_items.every(i => !i.license_key)) && (
+                                        <div className="text-center py-12 bg-dark-900/50 rounded-xl border border-white/5">
+                                            <i className="fas fa-key text-4xl text-gray-600 mb-4"></i>
+                                            <p className="text-gray-400 font-bold">No active licenses found.</p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             
