@@ -20,6 +20,12 @@ const getAuthHeaders = () => {
     return { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' };
 };
 
+// HELPER: Generate Branded Avatar
+// Creates a stylish "Initials" avatar (e.g. "MH") using brand colors (Dark BG, Cyan Text)
+const getBrandedAvatar = (username: string) => {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=0f172a&color=06b6d4&bold=true&size=128&font-size=0.33`;
+};
+
 const fetchWooCommerce = async (endpoint: string, method = 'GET', body?: any) => {
   const config: RequestInit = {
     method,
@@ -257,7 +263,12 @@ export const api = {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(userData)
           });
-          if (response.ok) return await response.json();
+          if (response.ok) {
+              const u = await response.json();
+              // Apply branded avatar
+              u.avatar_url = getBrandedAvatar(u.username);
+              return u;
+          }
           throw new Error("Registration failed");
       } catch (e) { throw e; }
   },
@@ -270,7 +281,10 @@ export const api = {
               body: JSON.stringify({ email, password })
           });
           if (!response.ok) throw new Error("Invalid credentials");
-          return response.json();
+          const u = await response.json();
+          // Apply branded avatar
+          u.avatar_url = getBrandedAvatar(u.username);
+          return u;
       } catch (error) { throw error; }
   },
 
@@ -305,7 +319,10 @@ export const api = {
               body: JSON.stringify({ email })
           });
           if (!response.ok) return null;
-          return response.json();
+          const u = await response.json();
+          // Apply branded avatar
+          u.avatar_url = getBrandedAvatar(u.username);
+          return u;
       } catch (e) { return null; }
   },
 
