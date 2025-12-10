@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -234,7 +232,9 @@ const OrderRow: React.FC<{ order: Order }> = ({ order }) => {
                     <div>
                          <h4 className="text-gray-400 font-bold uppercase text-xs mb-3">Order Items</h4>
                          {order.line_items.map((item, idx) => {
-                             const isEncrypted = item.license_key && item.license_key.startsWith('def50');
+                             const keyStr = item.license_key || '';
+                             const isEncrypted = keyStr.startsWith('def50');
+                             const isError = keyStr.startsWith('Error:');
                              
                              return (
                                 <div key={idx} className="flex flex-col gap-2 py-3 border-b border-white/5 last:border-0">
@@ -243,18 +243,20 @@ const OrderRow: React.FC<{ order: Order }> = ({ order }) => {
                                     </div>
                                     
                                     {/* License Key Display Logic */}
-                                    {item.license_key && (
+                                    {keyStr && (
                                         <div className="mt-1">
-                                            {isEncrypted ? (
+                                            {isEncrypted || isError ? (
                                                 <div className="bg-red-500/5 border border-red-500/20 p-2 rounded flex items-center gap-2">
                                                     <i className="fas fa-lock text-red-500"></i>
-                                                    <span className="text-red-400 text-xs font-bold uppercase">Decryption Failed</span>
-                                                    <span className="text-gray-500 text-[10px]">Contact support</span>
+                                                    <span className="text-red-400 text-xs font-bold uppercase">
+                                                        {isError ? keyStr.replace('Error: ', '') : 'Processing Key...'}
+                                                    </span>
+                                                    <span className="text-gray-500 text-[10px] ml-auto">Please refresh or contact support</span>
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-2 bg-black/40 p-2 rounded border border-primary/20">
-                                                    <span className="font-mono text-primary text-xs select-all break-all">{item.license_key}</span>
-                                                    <button onClick={() => navigator.clipboard.writeText(item.license_key || '')} className="text-gray-500 hover:text-white"><i className="fas fa-copy"></i></button>
+                                                    <span className="font-mono text-primary text-xs select-all break-all">{keyStr}</span>
+                                                    <button onClick={() => navigator.clipboard.writeText(keyStr)} className="text-gray-500 hover:text-white"><i className="fas fa-copy"></i></button>
                                                 </div>
                                             )}
                                         </div>
@@ -399,6 +401,7 @@ export const DashboardPage: React.FC = () => {
                                         order.line_items.filter(item => item.license_key).map((item, idx) => {
                                             const keyStr = item.license_key || '';
                                             const isEncrypted = keyStr.startsWith('def50'); 
+                                            const isError = keyStr.startsWith('Error:');
 
                                             return (
                                                 <div key={`${order.id}-${idx}`} className="bg-gradient-to-r from-dark-900 to-dark-950 border border-primary/30 p-6 rounded-xl relative overflow-hidden group">
@@ -414,17 +417,19 @@ export const DashboardPage: React.FC = () => {
                                                             </div>
                                                             <p className="text-gray-400 text-xs mb-4">Ready to Redeem</p>
                                                             
-                                                            {isEncrypted ? (
+                                                            {isEncrypted || isError ? (
                                                                 <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
                                                                     <div className="flex items-center gap-2 mb-2">
                                                                         <i className="fas fa-exclamation-triangle text-red-500 animate-pulse"></i>
-                                                                        <span className="text-red-400 font-bold text-xs uppercase tracking-wider">Decryption Failed</span>
+                                                                        <span className="text-red-400 font-bold text-xs uppercase tracking-wider">
+                                                                            {isError ? keyStr.replace('Error: ', '') : 'Processing Key...'}
+                                                                        </span>
                                                                     </div>
                                                                     <p className="text-gray-400 text-[11px] leading-relaxed mb-3">
-                                                                        Server reported encrypted key. Please contact support.
+                                                                        Server is validating your key. Please wait or contact support.
                                                                     </p>
                                                                     <a 
-                                                                        href={`mailto:${config.contact.email}?subject=Decryption Error Order #${order.id}&body=My license key is showing as encrypted/invalid for Order #${order.id}.`}
+                                                                        href={`mailto:${config.contact.email}?subject=Key Error Order #${order.id}&body=My license key for Order #${order.id} is showing an error.`}
                                                                         className="inline-block bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-bold px-3 py-2 rounded transition-colors"
                                                                     >
                                                                         <i className="fas fa-envelope mr-2"></i> Report Issue

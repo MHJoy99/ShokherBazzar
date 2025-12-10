@@ -136,7 +136,7 @@ export const api = {
       } catch (e) { return null; }
   },
 
-  createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string }> => {
+  createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string; guest_token?: string }> => {
     const line_items = orderData.items.map((item: any) => ({
         product_id: item.id,
         quantity: item.quantity,
@@ -174,29 +174,31 @@ export const api = {
         if (response.ok) {
             const data = await response.json();
             
+            // Return token if available
+            const baseResult = {
+                id: data.id,
+                success: true,
+                guest_token: data.guest_token
+            };
+
             // 1. Try Direct Gateway Link
             if (data.payment_url) {
                 return {
-                    id: data.id,
-                    success: true,
+                    ...baseResult,
                     payment_url: data.payment_url
                 };
             }
             
-            // 2. Fallback to WP Checkout (if direct link fails)
+            // 2. Fallback to WP Checkout
             if (orderData.payment_method !== 'manual' && data.order_key) {
                 const wpPayLink = `https://admin.mhjoygamershub.com/checkout/order-pay/${data.id}/?pay_for_order=true&key=${data.order_key}`;
                 return {
-                    id: data.id,
-                    success: true,
+                    ...baseResult,
                     payment_url: wpPayLink
                 };
             }
 
-            return {
-                id: data.id,
-                success: true
-            };
+            return baseResult;
         } else {
             const err = await response.json();
             throw new Error(err.message || 'Order creation failed');
@@ -331,7 +333,6 @@ export const api = {
                   license_key: i.license_keys && i.license_keys.length > 0 ? i.license_keys.join(' | ') : null,
                   image: i.image,
                   downloads: [],
-                  debug_log: i.debug_log || [] // Capture server logs
               }))
           }));
       } catch (error) { 
@@ -340,35 +341,40 @@ export const api = {
       }
   },
 
-  trackOrder: async (orderId: string, email: string): Promise<Order | null> => {
+  trackOrder: async (orderId: string, email: string, token?: string): Promise<{ type: 'success' | 'email_sent' | 'error', data?: Order }> => {
       try {
           const response = await fetch(`${CUSTOM_API_URL}/track-order`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ order_id: orderId, email: email })
+              body: JSON.stringify({ order_id: orderId, email: email, token: token })
           });
 
-          if (!response.ok) return null;
+          const data = await response.json();
 
-          const o = await response.json();
-          return {
-              id: o.id,
-              status: o.status,
-              total: o.total,
+          if (data.status === 'email_sent') {
+              return { type: 'email_sent' };
+          }
+
+          if (!response.ok) return { type: 'error' };
+
+          const order: Order = {
+              id: data.id,
+              status: data.status,
+              total: data.total,
               currency_symbol: '৳',
-              date_created: o.date_created,
+              date_created: data.date_created,
               customer_note: "",
-              line_items: o.items.map((i: any) => ({
+              line_items: data.items.map((i: any) => ({
                   name: i.name,
                   quantity: i.quantity,
                   license_key: i.license_keys && i.license_keys.length > 0 ? i.license_keys.join(' | ') : null,
                   image: i.image,
                   downloads: [],
-                  debug_log: i.debug_log || [] // Capture server logs
               }))
           };
+          return { type: 'success', data: order };
       } catch (e) {
-          return null;
+          return { type: 'error' };
       }
   },
 

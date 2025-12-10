@@ -1,31 +1,65 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Order } from '../types';
 import { Helmet } from 'react-helmet-async';
 import { config } from '../config';
 import { useToast } from '../context/ToastContext';
+import { useSearchParams } from 'react-router-dom';
 
 export const TrackOrder: React.FC = () => {
+    const [searchParams] = useSearchParams();
     const [orderId, setOrderId] = useState('');
     const [email, setEmail] = useState('');
+    const [token, setToken] = useState('');
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [showLogs, setShowLogs] = useState<number | null>(null);
+    const [emailSent, setEmailSent] = useState(false);
     const { showToast } = useToast();
+
+    // AUTO-TRACK IF URL PARAMS EXIST
+    useEffect(() => {
+        const oid = searchParams.get('order_id');
+        const em = searchParams.get('email');
+        const tk = searchParams.get('token');
+        
+        if (oid && em) {
+            setOrderId(oid);
+            setEmail(em);
+            if (tk) setToken(tk);
+            
+            // Auto trigger tracking if all data is present
+            if(tk) {
+                // We need a small delay to ensure state is set or just call directly
+                api.trackOrder(oid, em, tk).then(res => {
+                    if (res.type === 'success' && res.data) {
+                        setOrder(res.data);
+                    } else if (res.type === 'error') {
+                        setError("Invalid tracking link or expired token.");
+                    }
+                });
+            }
+        }
+    }, [searchParams]);
 
     const handleTrack = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError('');
         setOrder(null);
+        setEmailSent(false);
+        
         try {
-            const result = await api.trackOrder(orderId, email);
-            if (result) {
-                setOrder(result);
+            // Pass token if we have it (e.g. from URL)
+            const result = await api.trackOrder(orderId, email, token);
+            
+            if (result.type === 'success' && result.data) {
+                setOrder(result.data);
+            } else if (result.type === 'email_sent') {
+                setEmailSent(true);
             } else {
-                setError("Order not found or email mismatch.");
+                setError("Order not found or access denied.");
             }
         } catch (err) {
             setError("Failed to track order. Please check your details.");
@@ -47,33 +81,47 @@ export const TrackOrder: React.FC = () => {
                         
                         {error && <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded mb-6 text-xs font-bold text-center">{error}</div>}
 
-                        <form onSubmit={handleTrack} className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Order ID</label>
-                                <input 
-                                    type="text" 
-                                    required 
-                                    value={orderId} 
-                                    onChange={(e) => setOrderId(e.target.value)} 
-                                    placeholder="e.g. 9290" 
-                                    className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none font-mono" 
-                                />
+                        {emailSent ? (
+                            <div className="text-center py-8 animate-fade-in-up">
+                                <div className="w-16 h-16 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                                    <i className="fas fa-envelope-open-text"></i>
+                                </div>
+                                <h3 className="text-xl font-bold text-white mb-2">Check Your Email</h3>
+                                <p className="text-gray-400 text-sm mb-6">
+                                    For security, we've sent a magic link to <b>{email}</b>. 
+                                    Click the link in the email to view your keys.
+                                </p>
+                                <button onClick={() => setEmailSent(false)} className="text-primary text-xs font-bold uppercase hover:underline">Try Different Email</button>
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Billing Email</label>
-                                <input 
-                                    type="email" 
-                                    required 
-                                    value={email} 
-                                    onChange={(e) => setEmail(e.target.value)} 
-                                    placeholder="email@example.com" 
-                                    className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" 
-                                />
-                            </div>
-                            <button disabled={loading} type="submit" className="w-full bg-primary hover:bg-cyan-400 text-black font-black uppercase py-4 rounded-xl shadow-glow transition-all">
-                                {loading ? 'Searching...' : 'Track Order'}
-                            </button>
-                        </form>
+                        ) : (
+                            <form onSubmit={handleTrack} className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Order ID</label>
+                                    <input 
+                                        type="text" 
+                                        required 
+                                        value={orderId} 
+                                        onChange={(e) => setOrderId(e.target.value)} 
+                                        placeholder="e.g. 9290" 
+                                        className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none font-mono" 
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Billing Email</label>
+                                    <input 
+                                        type="email" 
+                                        required 
+                                        value={email} 
+                                        onChange={(e) => setEmail(e.target.value)} 
+                                        placeholder="email@example.com" 
+                                        className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary focus:outline-none" 
+                                    />
+                                </div>
+                                <button disabled={loading} type="submit" className="w-full bg-primary hover:bg-cyan-400 text-black font-black uppercase py-4 rounded-xl shadow-glow transition-all">
+                                    {loading ? 'Searching...' : 'Track Order'}
+                                </button>
+                            </form>
+                        )}
                     </div>
                 ) : (
                     <div className="bg-dark-900 border border-white/10 rounded-2xl p-8 shadow-2xl">
@@ -109,33 +157,8 @@ export const TrackOrder: React.FC = () => {
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div className="space-y-3">
-                                                    <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 p-3 rounded text-xs font-bold">
-                                                        Status: {order.status.toUpperCase()} - Key not yet available.
-                                                    </div>
-                                                    
-                                                    {/* DEBUG TOGGLE */}
-                                                    {item.debug_log && item.debug_log.length > 0 && (
-                                                        <div className="mt-2">
-                                                            <button 
-                                                                onClick={() => setShowLogs(showLogs === idx ? null : idx)} 
-                                                                className="text-[10px] uppercase font-bold text-gray-600 hover:text-white flex items-center gap-2"
-                                                            >
-                                                                <i className="fas fa-bug"></i> {showLogs === idx ? 'Hide Debug Logs' : 'Show Debug Logs'}
-                                                            </button>
-                                                            
-                                                            {showLogs === idx && (
-                                                                <div className="mt-2 bg-black p-4 rounded-lg font-mono text-[10px] text-green-400 h-48 overflow-y-auto border border-gray-800">
-                                                                    {item.debug_log.map((log: string, i: number) => (
-                                                                        <div key={i} className="border-b border-gray-900 pb-1 mb-1 last:border-0">
-                                                                            <span className="text-gray-500 mr-2">[{i+1}]</span>
-                                                                            {log}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 p-3 rounded text-xs font-bold">
+                                                    Status: {order.status.toUpperCase()} - Key not yet available.
                                                 </div>
                                             )}
                                         </div>

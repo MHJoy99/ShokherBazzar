@@ -24,6 +24,9 @@ export const Cart: React.FC = () => {
   const [password, setPassword] = useState('');
   const [orderId, setOrderId] = useState<number | null>(null);
   
+  // SECURE TOKEN STATE
+  const [guestToken, setGuestToken] = useState<string | null>(null);
+  
   // Coupon State
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
@@ -40,18 +43,18 @@ export const Cart: React.FC = () => {
       const status = searchParams.get('status');
       const oid = searchParams.get('order_id');
       const invoice = searchParams.get('invoice_id'); 
+      const token = searchParams.get('token'); // Get Token from URL
       
-      // Accept 'success' OR 'completed' as valid status
       if ((status === 'success' || status === 'completed') && (oid || invoice)) {
           const finalId = oid ? parseInt(oid) : (invoice ? parseInt(invoice) : 0);
           setOrderId(finalId);
+          if(token) setGuestToken(token); // Save token for display
+          
           setStep(3);
           clearCart();
           
-          // SAFETY LOCK: Run verification exactly ONCE to prevent loops
           if (!verificationRun.current && finalId > 0) {
               verificationRun.current = true;
-              // Pass both Order ID and Invoice ID for robust verification
               api.verifyPayment(finalId, invoice || undefined);
           }
       }
@@ -63,7 +66,7 @@ export const Cart: React.FC = () => {
 
   const copyToClipboard = (text: string) => {
       navigator.clipboard.writeText(text);
-      showToast("Number Copied!", "success");
+      showToast("Copied!", "success");
   };
 
   const handleApplyCoupon = async () => {
@@ -105,7 +108,6 @@ export const Cart: React.FC = () => {
     try {
         let customerId = user?.id;
 
-        // Auto-Register if requested
         if (!user && createAccount && password) {
              try {
                 const newUser = await register({
@@ -132,15 +134,15 @@ export const Cart: React.FC = () => {
 
         if (result.success) {
             setOrderId(result.id);
+            if(result.guest_token) setGuestToken(result.guest_token); // Capture Token
+
             if (isFreeOrder) {
                 clearCart();
                 setStep(3);
             } else if (result.payment_url) { 
-                // Redirect to Payment Gateway (Direct)
                 window.location.href = result.payment_url; 
             } else { 
                 if (paymentMethod === 'uddoktapay') {
-                    // Fallback if URL missing
                     setPaymentError(true);
                 } else {
                     clearCart();
@@ -165,6 +167,8 @@ export const Cart: React.FC = () => {
   );
 
   if (step === 3) {
+    const trackingLink = `${window.location.origin}/track-order?order_id=${orderId}&email=${encodeURIComponent(formData.email || user?.email || '')}${guestToken ? `&token=${guestToken}` : ''}`;
+
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <Helmet><title>Order Completed | {config.siteName}</title></Helmet>
@@ -177,7 +181,23 @@ export const Cart: React.FC = () => {
               <p className="text-2xl font-black text-white tracking-widest">#{orderId}</p>
           </div>
           <p className="text-gray-400 mb-8 text-sm">{paymentMethod === 'manual' && !isFreeOrder ? 'We are verifying your transaction ID. You will receive codes via email shortly.' : `Thank you! Your payment is verified. Check your email for codes.`}</p>
-          <Link to="/" className="inline-block w-full bg-primary hover:bg-primary-hover text-black font-black uppercase py-4 rounded-xl transition-all shadow-glow">Continue Shopping</Link>
+          
+          {/* TRACKING LINK FOR GUESTS */}
+          {guestToken && (
+              <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-xl mb-8">
+                  <p className="text-blue-400 text-xs font-bold uppercase mb-2"><i className="fas fa-lock"></i> Secure Tracking Link</p>
+                  <p className="text-gray-400 text-[10px] mb-3">Save this link to access your codes without logging in.</p>
+                  <div className="flex gap-2">
+                      <input type="text" readOnly value={trackingLink} className="w-full bg-dark-950 border border-white/10 rounded px-2 text-[10px] text-gray-400" />
+                      <button onClick={() => copyToClipboard(trackingLink)} className="bg-blue-500 hover:bg-blue-400 text-white text-xs px-3 rounded font-bold">Copy</button>
+                  </div>
+              </div>
+          )}
+
+          <div className="flex gap-4">
+              <a href={trackingLink} className="flex-1 bg-dark-800 hover:bg-dark-700 text-white font-bold uppercase py-4 rounded-xl transition-all border border-white/10 text-xs">View Keys</a>
+              <Link to="/" className="flex-1 bg-primary hover:bg-primary-hover text-black font-black uppercase py-4 rounded-xl transition-all shadow-glow text-xs flex items-center justify-center">Continue Shopping</Link>
+          </div>
         </div>
       </div>
     );
