@@ -2,14 +2,6 @@
 import { Product, Category, Order, User, OrderNote, Coupon } from '../types';
 import { config } from '../config';
 
-// --- MOCK DATA FOR FALLBACK ONLY ---
-export const MOCK_CATEGORIES: Category[] = [
-  { id: 1, name: 'Action', slug: 'action', count: 120 },
-  { id: 6, name: 'Gift Cards', slug: 'gift-cards', count: 15 },
-];
-
-export const MOCK_PRODUCTS: Product[] = []; 
-
 // UPDATED BACKEND DOMAINS
 const WC_BASE_URL = "https://admin.mhjoygamershub.com/wp-json/wc/v3";
 const WP_BASE_URL = "https://admin.mhjoygamershub.com/wp-json/wp/v2";
@@ -151,7 +143,7 @@ export const api = {
       const data = await fetchWooCommerce('/products/categories?hide_empty=true&per_page=100');
       return data.map((c: any) => ({ id: c.id, name: c.name, slug: c.slug, count: c.count }));
     } catch (error) {
-      return MOCK_CATEGORIES;
+      return [];
     }
   },
 
@@ -224,7 +216,6 @@ export const api = {
     };
 
     // 2. USE SECURE PROXY (Strict Mode)
-    // We removed the fallback to ensure the Masquerade Headers are always used via PHP
     try {
         const response = await fetch(`${CUSTOM_API_URL}/create-order`, {
             method: 'POST',
@@ -245,7 +236,7 @@ export const api = {
         }
     } catch (proxyError: any) {
         console.error("Secure Proxy Failed:", proxyError);
-        throw proxyError; // Propagate error to show in UI
+        throw proxyError;
     }
   },
 
@@ -262,7 +253,7 @@ export const api = {
           }
           return false;
       } catch (e) {
-          console.error("Verification failed", e);
+          // Fail silently to avoid interrupting user experience
           return false;
       }
   },
