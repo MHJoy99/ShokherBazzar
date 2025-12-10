@@ -10,6 +10,7 @@ import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { ToastProvider } from './context/ToastContext';
 import { SkeletonHero } from './components/Skeleton';
+import { WhatsAppFloat } from './components/WhatsAppFloat';
 
 // Lazy Load Pages to reduce bundle size
 const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
@@ -41,6 +42,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <main className={`flex-grow ${!isAdmin && !is404 ? 'pt-16' : ''}`}>
         {children}
       </main>
+      {!isAdmin && !is404 && <WhatsAppFloat />}
       {!isAdmin && !is404 && <Footer />}
     </div>
   );

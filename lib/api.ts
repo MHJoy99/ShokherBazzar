@@ -89,7 +89,8 @@ export const api = {
       const product = mapWooProduct(data);
       if (data.type === 'variable') {
           try {
-             const variationsData = await fetchWooCommerce(`/products/${id}/variations`);
+             // INCREASED LIMIT TO 100 TO FIX MISSING VARIATIONS
+             const variationsData = await fetchWooCommerce(`/products/${id}/variations?per_page=100`);
              product.variations = variationsData.map((v: any) => ({
                  id: v.id,
                  name: v.attributes.map((a: any) => a.option).join(' ') || `Option ${v.id}`,

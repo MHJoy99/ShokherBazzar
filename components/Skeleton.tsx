@@ -15,7 +15,7 @@ export const SkeletonCard: React.FC = () => (
 );
 
 export const SkeletonHero: React.FC = () => (
-    <div className="h-[600px] w-full bg-dark-950 border-b border-white/5 animate-pulse relative">
+    <div className="h-[550px] md:h-[650px] w-full bg-dark-950 border-b border-white/5 animate-pulse relative">
         <div className="max-w-7xl mx-auto px-4 h-full flex flex-col justify-center">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-12 items-center">
                 <div className="md:col-span-7 space-y-6">
@@ -25,7 +25,7 @@ export const SkeletonHero: React.FC = () => (
                     <div className="h-14 w-48 bg-white/5 rounded-xl mt-4"></div>
                 </div>
                 <div className="hidden md:block md:col-span-5">
-                    <div className="w-[340px] h-[480px] mx-auto bg-white/5 rounded-2xl"></div>
+                    <div className="w-[300px] lg:w-[340px] aspect-[3/4] mx-auto bg-white/5 rounded-2xl"></div>
                 </div>
             </div>
         </div>

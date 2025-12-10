@@ -12,7 +12,11 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
 
   return (
     <motion.div whileHover={{ y: -8 }} className="bg-dark-900 rounded-xl overflow-hidden border border-white/5 hover:border-primary/50 transition-all group h-full flex flex-col shadow-lg hover:shadow-glow-sm">
-       <Link to={`/product/${product.id}`} className="relative block aspect-[3/4] bg-dark-950 overflow-hidden">
+       <Link 
+         to={`/product/${product.id}`} 
+         state={{ preload: product }} // OPTIMISTIC UI: Pass data immediately
+         className="relative block aspect-[3/4] bg-dark-950 overflow-hidden"
+       >
           <img 
             src={product.images[0].src} 
             loading="lazy"
@@ -34,7 +38,6 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
        </Link>
        
        <div className="p-5 flex flex-col flex-grow relative">
-          {/* Performance Optimization: Removed absolute blur overlay that caused lag. Using simple opacity instead. */}
           <div className="relative z-10 flex flex-col h-full">
               <h3 className="text-white font-bold text-sm mb-2 line-clamp-2 leading-tight group-hover:text-primary transition-colors">{product.name}</h3>
               <div className="mt-auto flex justify-between items-end border-t border-white/5 pt-3">

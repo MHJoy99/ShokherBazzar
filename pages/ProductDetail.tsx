@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../lib/api'; 
 import { Product, Variation } from '../types'; 
 import { ProductCard } from '../components/ProductCard';
@@ -13,12 +13,18 @@ import { SkeletonCard } from '../components/Skeleton';
 
 export const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const [product, setProduct] = useState<Product | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const preload = location.state?.preload as Product | undefined;
+
+  // Optimistic UI: Init with preload if available
+  const [product, setProduct] = useState<Product | null>(preload || null);
+  
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [suggestedProducts, setSuggestedProducts] = useState<Product[]>([]);
   
   // Loading States
-  const [loadingMain, setLoadingMain] = useState(true);
+  const [loadingMain, setLoadingMain] = useState(!preload); // Only load if no preload
   const [loadingRelated, setLoadingRelated] = useState(true);
 
   const [selectedVariation, setSelectedVariation] = useState<Variation | null>(null);
@@ -30,10 +36,12 @@ export const ProductDetail: React.FC = () => {
     const fetchProductData = async () => {
       if (!id) return;
       
-      // 1. FAST LOAD: Reset states and scroll up
-      setLoadingMain(true);
       setLoadingRelated(true);
-      setProduct(null);
+      if (!product) {
+          setLoadingMain(true);
+      }
+      
+      // Reset sidebar data when ID changes
       setRelatedProducts([]);
       setSuggestedProducts([]);
       window.scrollTo(0, 0);
@@ -300,7 +308,13 @@ export const ProductDetail: React.FC = () => {
 
                     {/* Actions */}
                     <div className="space-y-3">
-                        <button onClick={() => { addToCart(product, qty, selectedVariation || undefined); window.location.href = '#/cart'; }} className="w-full bg-primary hover:bg-primary-hover text-black font-black uppercase italic tracking-wider py-4 rounded-xl shadow-glow transition-all transform active:scale-95">
+                        <button 
+                            onClick={() => { 
+                                addToCart(product, qty, selectedVariation || undefined); 
+                                navigate('/cart'); 
+                            }} 
+                            className="w-full bg-primary hover:bg-primary-hover text-black font-black uppercase italic tracking-wider py-4 rounded-xl shadow-glow transition-all transform active:scale-95"
+                        >
                             Buy Now
                         </button>
                         <button onClick={() => addToCart(product, qty, selectedVariation || undefined)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold uppercase tracking-wider py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95">
@@ -389,7 +403,15 @@ export const ProductDetail: React.FC = () => {
       {/* MOBILE STICKY FOOTER */}
       <div className="fixed bottom-0 left-0 w-full bg-dark-900 border-t border-white/10 p-4 z-50 md:hidden flex items-center justify-between gap-4 shadow-2xl">
           <div><p className="text-[10px] text-gray-500 uppercase font-bold">Total</p><p className="text-xl font-black text-white">৳{totalPrice}</p></div>
-          <button onClick={() => { addToCart(product, qty, selectedVariation || undefined); window.location.href = '#/cart'; }} className="bg-primary text-black font-black uppercase italic py-3 px-8 rounded shadow-glow flex-1">Buy Now</button>
+          <button 
+              onClick={() => { 
+                  addToCart(product, qty, selectedVariation || undefined); 
+                  navigate('/cart'); 
+              }} 
+              className="bg-primary text-black font-black uppercase italic py-3 px-8 rounded shadow-glow flex-1"
+          >
+              Buy Now
+          </button>
       </div>
     </div>
   );
