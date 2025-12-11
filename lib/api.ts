@@ -228,10 +228,11 @@ export const api = {
       try {
           const order = await fetchWooCommerce('/orders', 'POST', payload);
           
+          // STRICT LOGIC: Get direct payment link from API response or MetaData.
+          // DO NOT fallback to backend order-pay page.
+          
           let paymentUrl = order.payment_url; 
           
-          // CRITICAL FIX: Look for custom payment URLs in meta_data
-          // This is where plugins like UddoktaPay usually hide the direct link
           if (!paymentUrl && order.meta_data && Array.isArray(order.meta_data)) {
              const metaLink = order.meta_data.find((m: any) => 
                 m.key === 'uddoktapay_payment_url' || 
@@ -240,12 +241,6 @@ export const api = {
                 (typeof m.value === 'string' && m.value.includes('pay.uddoktapay.com'))
              );
              if (metaLink) paymentUrl = metaLink.value;
-          }
-
-          // FALLBACK: Only if we have NO url from meta_data, use the "Ugly" page.
-          // This ensures the user can still pay even if the direct link isn't found.
-          if (!paymentUrl && data.payment_method === 'uddoktapay') {
-              paymentUrl = `https://admin.mhjoygamershub.com/checkout/order-pay/${order.id}/?pay_for_order=true&key=${order.order_key}`;
           }
 
           return { success: true, id: order.id, guest_token: order.order_key, payment_url: paymentUrl }; 
