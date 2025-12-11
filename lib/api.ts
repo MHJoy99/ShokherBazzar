@@ -1,3 +1,4 @@
+
 import { Product, Category, Order, User, OrderNote, Coupon } from '../types';
 import { config } from '../config';
 
@@ -19,11 +20,6 @@ const getAuthHeaders = () => {
     return { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' };
 };
 
-// HELPER: Generate Branded Avatar
-const getBrandedAvatar = (username: string) => {
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=0f172a&color=06b6d4&bold=true&size=128&font-size=0.33`;
-};
-
 const fetchWooCommerce = async (endpoint: string, method = 'GET', body?: any) => {
   // CACHE BUSTING: Append timestamp to URL to prevent browser/CDN caching.
   const timestamp = new Date().getTime();
@@ -32,17 +28,13 @@ const fetchWooCommerce = async (endpoint: string, method = 'GET', body?: any) =>
 
   const config: RequestInit = {
     method,
-    headers: getAuthHeaders(), 
+    headers: getAuthHeaders(),
     body: body ? JSON.stringify(body) : undefined,
   };
   const response = await fetch(url, config);
   if (!response.ok) {
-      let message = `API Error: ${response.statusText}`;
-      try {
-          const err = await response.json();
-          message = err.message || message;
-      } catch (e) {}
-      throw new Error(message);
+      const err = await response.json();
+      throw new Error(err.message || `API Error: ${response.statusText}`);
   }
   return response.json();
 };
@@ -52,25 +44,6 @@ const fetchWordPress = async (endpoint: string) => {
     if (!response.ok) throw new Error("WP API Error");
     return response.json();
 };
-
-const fetchCustom = async (endpoint: string, method = 'GET', body?: any) => {
-    const url = `${CUSTOM_API_URL}${endpoint}`;
-    const config: RequestInit = {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: body ? JSON.stringify(body) : undefined,
-    };
-    const response = await fetch(url, config);
-     if (!response.ok) {
-        let message = `Custom API Error: ${response.statusText}`;
-        try {
-            const err = await response.json();
-            message = err.message || message;
-        } catch {}
-        throw new Error(message);
-    }
-    return response.json();
-}
 
 const mapWooProduct = (p: any): Product => ({
   id: p.id,
@@ -100,31 +73,13 @@ const mapWooProduct = (p: any): Product => ({
   featured: p.featured || false
 });
 
-const mapOrder = (o: any): Order => ({
-    id: o.id,
-    status: o.status,
-    total: o.total,
-    currency_symbol: o.currency_symbol || '৳',
-    date_created: new Date(o.date_created).toLocaleDateString(),
-    customer_note: o.customer_note,
-    line_items: o.line_items.map((i: any) => ({
-        name: i.name,
-        quantity: i.quantity,
-        license_key: i.meta_data?.find((m: any) => m.key === '_license_key' || m.key === 'license_key')?.value || '',
-        image: i.image?.src || PLACEHOLDER_IMG,
-        downloads: i.downloads // Assuming API returns downloads in line items if extended, or logic elsewhere
-    }))
-});
-
 export const api = {
   getProducts: async (idOrSlug?: string): Promise<Product[]> => {
     try {
       let endpoint = '/products?per_page=50'; 
       if (idOrSlug && idOrSlug !== 'all') {
-          // Find Category ID first
           const cats = await fetchWooCommerce(`/products/categories?slug=${idOrSlug}`);
           if(cats.length > 0) endpoint = `/products?category=${cats[0].id}&per_page=50`;
-          else return []; // Category not found
       }
       const data = await fetchWooCommerce(endpoint);
       return data.map(mapWooProduct);
@@ -176,141 +131,143 @@ export const api = {
     } catch { return []; }
   },
 
-  verifyPayment: async (orderId: number, invoiceId?: string) => {
-      // Mock verification or call backend to check status
+  createOrder: async (orderData: any) => {
+      // 1. Try Custom API Endpoint first. 
+      // This is crucial for Payment Gateways like UddoktaPay to return their own URL instead of WP fallback.
       try {
-          const order = await fetchWooCommerce(`/orders/${orderId}`);
-          return order.status === 'completed' || order.status === 'processing';
-      } catch { return false; }
+          const response = await fetch(`${CUSTOM_API_URL}/checkout`, {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify(orderData)
+          });
+          const data = await response.json();
+          if (response.ok) return data; 
+      } catch (e) { console.error("Custom Checkout Failed", e); }
+
+      // 2. Fallback: Standard WooCommerce Order (Less capable for Headless Payment)
+      // This will return the 'order-pay' link which our frontend now filters out for automated payments.
+      try {
+          const data = await fetchWooCommerce('/orders', 'POST', {
+              payment_method: orderData.payment_method,
+              payment_method_title: orderData.payment_method === 'uddoktapay' ? 'bKash/Nagad' : 'Manual',
+              set_paid: false,
+              billing: orderData.billing,
+              line_items: orderData.items.map((i: any) => ({
+                  product_id: i.id,
+                  quantity: i.quantity,
+                  variation_id: i.selectedVariation?.id
+              })),
+              customer_id: orderData.customer_id || 0,
+              coupon_lines: orderData.coupon_code ? [{ code: orderData.coupon_code }] : [],
+              meta_data: [
+                   { key: 'billing_phone', value: orderData.billing.phone },
+                   { key: 'sender_number', value: orderData.senderNumber },
+                   { key: 'transaction_id', value: orderData.trxId }
+              ]
+          });
+          return { success: true, id: data.id, payment_url: data.payment_url, guest_token: data.order_key }; 
+      } catch (e) {
+          return { success: false, message: "Order creation failed" };
+      }
   },
 
-  getCoupon: async (code: string): Promise<Coupon | null> => {
+  verifyPayment: async (orderId: number, invoiceId?: string) => {
       try {
-          const coupons = await fetchWooCommerce(`/coupons?code=${code}`);
-          if (coupons.length > 0) {
-              return {
-                  id: coupons[0].id,
-                  code: coupons[0].code,
-                  amount: coupons[0].amount,
-                  discount_type: coupons[0].discount_type
-              };
-          }
+           await fetch(`${CUSTOM_API_URL}/payment/verify`, {
+               method: 'POST',
+               headers: getAuthHeaders(),
+               body: JSON.stringify({ order_id: orderId, invoice_id: invoiceId })
+           });
+      } catch(e) {}
+  },
+
+  trackOrder: async (orderId: string, email: string, token?: string) => {
+      try {
+          const params = new URLSearchParams({ order_id: orderId, email: email });
+          if(token) params.append('token', token);
+          
+          const response = await fetch(`${CUSTOM_API_URL}/track-order?${params.toString()}`, { headers: getAuthHeaders() });
+          return response.json();
+      } catch(e) { return { type: 'error' }; }
+  },
+
+  getPage: async (slug: string) => {
+      try {
+          const res = await fetchWordPress(`/pages?slug=${slug}`);
+          if(res.length > 0) return { title: res[0].title.rendered, content: res[0].content.rendered };
           return null;
       } catch { return null; }
   },
 
-  createOrder: async (data: any): Promise<{success: boolean, id: number, payment_url?: string, guest_token?: string}> => {
-      // Construct WooCommerce Order Payload
-      const payload = {
-          payment_method: data.payment_method === 'manual' ? 'bacs' : 'uddoktapay',
-          payment_method_title: data.payment_method === 'manual' ? 'Manual Transfer' : 'Online Payment',
-          set_paid: false,
-          billing: {
-              first_name: data.billing.first_name,
-              last_name: data.billing.last_name,
-              email: data.billing.email,
-              phone: data.billing.phone,
-          },
-          line_items: data.items.map((item: any) => ({
-              product_id: item.id, 
-              quantity: item.quantity,
-              // Map variation_id if it's a variation
-              variation_id: item.selectedVariation ? item.id : undefined 
-          })),
-          customer_id: data.customer_id || 0,
-          meta_data: [],
-          coupon_lines: data.coupon_code ? [{ code: data.coupon_code }] : []
-      };
-
-      if (data.trxId) payload.meta_data.push({ key: 'transaction_id', value: data.trxId });
-      if (data.senderNumber) payload.meta_data.push({ key: 'sender_number', value: data.senderNumber });
-
-      try {
-          const order = await fetchWooCommerce('/orders', 'POST', payload);
-          
-          let paymentUrl = order.payment_url; 
-          
-          // CRITICAL FIX: Look for custom payment URLs in meta_data
-          // This is where plugins like UddoktaPay usually hide the direct link
-          if (!paymentUrl && order.meta_data && Array.isArray(order.meta_data)) {
-             const metaLink = order.meta_data.find((m: any) => 
-                m.key === 'uddoktapay_payment_url' || 
-                m.key === 'payment_link' || 
-                m.key === '_uddoktapay_payment_url' ||
-                (typeof m.value === 'string' && m.value.includes('pay.uddoktapay.com'))
-             );
-             if (metaLink) paymentUrl = metaLink.value;
-          }
-
-          // FALLBACK: Only if we have NO url from meta_data, use the "Ugly" page.
-          // This ensures the user can still pay even if the direct link isn't found.
-          if (!paymentUrl && data.payment_method === 'uddoktapay') {
-              paymentUrl = `https://admin.mhjoygamershub.com/checkout/order-pay/${order.id}/?pay_for_order=true&key=${order.order_key}`;
-          }
-
-          return { success: true, id: order.id, guest_token: order.order_key, payment_url: paymentUrl }; 
-      } catch (e) {
-          throw e;
-      }
+  // Auth Functions
+  login: async (email: string, password?: string) => {
+       const res = await fetch(`${CUSTOM_API_URL}/login`, {
+           method: 'POST',
+           headers: getAuthHeaders(),
+           body: JSON.stringify({ email, password })
+       });
+       if(!res.ok) throw new Error("Login failed");
+       return res.json();
   },
-
-  sendMessage: async (data: { name: string; email: string; message: string }) => {
-      // Assuming a custom endpoint or Contact Form 7 integration
-      // Mock success for now as we don't have form endpoint
-      return new Promise(resolve => setTimeout(resolve, 500));
-  },
-
-  login: async (email: string, password?: string): Promise<User> => {
-      // MOCK IMPLEMENTATION FOR DEMO
-      if (password === 'error') throw new Error("Invalid Credentials");
-      
-      // Try to find customer by email
-      const customers = await fetchWooCommerce(`/customers?email=${email}`);
-      if (customers.length > 0) {
-           const c = customers[0];
-           return {
-               id: c.id,
-               username: c.username,
-               email: c.email,
-               avatar_url: c.avatar_url || getBrandedAvatar(c.username)
-           };
-      }
-      throw new Error("User not found");
-  },
-
-  register: async (data: any): Promise<User> => {
-      const payload = {
-          email: data.email,
-          first_name: data.first_name,
-          last_name: data.last_name,
-          username: data.email.split('@')[0],
-          password: data.password
-      };
-      const customer = await fetchWooCommerce('/customers', 'POST', payload);
-      return {
-           id: customer.id,
-           username: customer.username,
-           email: customer.email,
-           avatar_url: customer.avatar_url || getBrandedAvatar(customer.username)
-      };
-  },
-
-  updateProfile: async (userId: number, data: any): Promise<boolean> => {
-      try {
-          await fetchWooCommerce(`/customers/${userId}`, 'PUT', data);
-          return true;
-      } catch { return false; }
+  
+  register: async (data: any) => {
+      const res = await fetch(`${CUSTOM_API_URL}/register`, {
+           method: 'POST',
+           headers: getAuthHeaders(),
+           body: JSON.stringify(data)
+       });
+       if(!res.ok) throw new Error("Registration failed");
+       return res.json();
   },
 
   resetPassword: async (email: string) => {
-      // Call WP endpoint or mock
-      return true;
+       await fetch(`${CUSTOM_API_URL}/reset-password`, {
+           method: 'POST',
+           headers: getAuthHeaders(),
+           body: JSON.stringify({ email })
+       });
   },
 
-  getOrderNotes: async (orderId: number): Promise<OrderNote[]> => {
+  updateProfile: async (id: number, data: any) => {
+       try {
+           const res = await fetch(`${CUSTOM_API_URL}/customer/${id}`, {
+               method: 'PUT',
+               headers: getAuthHeaders(),
+               body: JSON.stringify(data)
+           });
+           return res.ok;
+       } catch { return false; }
+  },
+  
+  getProfileSync: async (email: string) => {
+      return null;
+  },
+
+  getUserOrders: async (id: number) => {
       try {
-          const notes = await fetchWooCommerce(`/orders/${orderId}/notes`);
-          return notes.map((n: any) => ({
+          const data = await fetchWooCommerce(`/orders?customer=${id}&per_page=20`);
+          return data.map((o: any) => ({
+              id: o.id,
+              status: o.status,
+              total: o.total,
+              currency_symbol: o.currency_symbol,
+              date_created: new Date(o.date_created).toLocaleDateString(),
+              customer_note: o.customer_note,
+              line_items: o.line_items.map((i: any) => ({
+                  name: i.name,
+                  quantity: i.quantity,
+                  license_key: i.meta_data?.find((m: any) => m.key === '_license_key' || m.key === 'serial_number')?.value,
+                  image: i.image?.src || PLACEHOLDER_IMG,
+                  downloads: i.downloads
+              }))
+          }));
+      } catch { return []; }
+  },
+
+  getOrderNotes: async (id: number) => {
+      try {
+          const data = await fetchWooCommerce(`/orders/${id}/notes`);
+          return data.map((n: any) => ({
               id: n.id,
               note: n.note,
               customer_note: n.customer_note,
@@ -318,49 +275,20 @@ export const api = {
           }));
       } catch { return []; }
   },
-
-  getProfileSync: async (email: string): Promise<User | null> => {
-       const customers = await fetchWooCommerce(`/customers?email=${email}`);
-       if (customers.length > 0) {
-           const c = customers[0];
-           return {
-               id: c.id,
-               username: c.username,
-               email: c.email,
-               avatar_url: c.avatar_url || getBrandedAvatar(c.username)
-           };
-       }
-       return null;
+  
+  sendMessage: async (data: any) => {
+      await fetch(`${CUSTOM_API_URL}/contact`, {
+           method: 'POST',
+           headers: getAuthHeaders(),
+           body: JSON.stringify(data)
+       });
   },
-
-  getUserOrders: async (userId: number): Promise<Order[]> => {
+  
+  getCoupon: async (code: string) => {
       try {
-          const orders = await fetchWooCommerce(`/orders?customer=${userId}`);
-          return orders.map(mapOrder);
-      } catch { return []; }
-  },
-
-  getPage: async (slug: string): Promise<{title: string, content: string} | null> => {
-      try {
-          const pages = await fetchWordPress(`/pages?slug=${slug}`);
-          if (pages.length > 0) {
-              return {
-                  title: pages[0].title.rendered,
-                  content: pages[0].content.rendered
-              };
-          }
+          const data = await fetchWooCommerce(`/coupons?code=${code}`);
+          if(data.length > 0) return data[0];
           return null;
       } catch { return null; }
-  },
-
-  trackOrder: async (orderId: string, email: string, token?: string): Promise<{type: string, data?: Order}> => {
-      try {
-          const order = await fetchWooCommerce(`/orders/${orderId}`);
-          // Simple email verification match or token match (order_key)
-          if (order.billing.email.toLowerCase() === email.toLowerCase() || (token && order.order_key === token)) {
-               return { type: 'success', data: mapOrder(order) };
-          }
-          return { type: 'error' };
-      } catch { return { type: 'error' }; }
   }
 };

@@ -122,17 +122,8 @@ export const Cart: React.FC = () => {
              }
         }
 
-        // FIX: Map items to ensure Variation ID is sent as Product ID for variable products.
-        // This forces the backend to recognize the exact variant selected.
-        const orderItems = items.map(item => {
-             if (item.selectedVariation) {
-                 return { ...item, id: item.selectedVariation.id };
-             }
-             return item;
-        });
-
         const result = await api.createOrder({ 
-            items: orderItems, 
+            items, 
             billing: formData, 
             payment_method: isFreeOrder ? 'manual' : paymentMethod, 
             trxId: paymentMethod === 'manual' ? trxId : undefined, 
@@ -148,12 +139,17 @@ export const Cart: React.FC = () => {
             if (isFreeOrder) {
                 clearCart();
                 setStep(3);
-            } else if (result.payment_url) { 
+            } else if (result.payment_url && !result.payment_url.includes('order-pay')) { 
+                // FIX: Only redirect if it's a REAL gateway URL (e.g. sandbox.uddoktapay.com)
+                // If the URL contains 'order-pay', it's the internal WP page, which we want to avoid.
                 window.location.href = result.payment_url; 
             } else { 
                 if (paymentMethod === 'uddoktapay') {
+                    // If we get here, it means we got an internal WP link or no link at all.
+                    // This counts as a failure for "Automated Payment" in headless mode.
                     setPaymentError(true);
                 } else {
+                    // Manual payments don't need a redirect, just success.
                     clearCart();
                     setStep(3); 
                 }
