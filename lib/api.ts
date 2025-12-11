@@ -26,12 +26,24 @@ const getBrandedAvatar = (username: string) => {
 };
 
 const fetchWooCommerce = async (endpoint: string, method = 'GET', body?: any) => {
+  // CACHE BUSTING: Append timestamp to URL to prevent browser/CDN caching
+  const timestamp = new Date().getTime();
+  const separator = endpoint.includes('?') ? '&' : '?';
+  // Only append timestamp for GET requests to force fresh data
+  const url = `${WC_BASE_URL}${endpoint}${method === 'GET' ? `${separator}_t=${timestamp}` : ''}`;
+
   const config: RequestInit = {
     method,
-    headers: getAuthHeaders(),
+    headers: {
+        ...getAuthHeaders(),
+        // Strict Cache Control Headers
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+    },
     body: body ? JSON.stringify(body) : undefined,
   };
-  const response = await fetch(`${WC_BASE_URL}${endpoint}`, config);
+  const response = await fetch(url, config);
   if (!response.ok) {
       const err = await response.json();
       throw new Error(err.message || `API Error: ${response.statusText}`);
