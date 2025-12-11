@@ -9,6 +9,7 @@ import { Helmet } from 'react-helmet-async';
 import { config } from '../config';
 import { useToast } from '../context/ToastContext';
 import { Coupon } from '../types';
+import { TrustPilotWidget } from '../components/TrustPilotWidget'; // Import Widget
 
 export const Cart: React.FC = () => {
   const { items, removeFromCart, updateQuantity, cartTotal, clearCart } = useCart();
@@ -206,6 +207,11 @@ export const Cart: React.FC = () => {
                   </div>
               </div>
           )}
+          
+          {/* TRUSTPILOT REVIEW REQUEST */}
+          <div className="mb-8">
+               <TrustPilotWidget />
+          </div>
 
           <div className="flex gap-4">
               <a href={trackingLink} className="flex-1 bg-dark-800 hover:bg-dark-700 text-white font-bold uppercase py-4 rounded-xl transition-all border border-white/10 text-xs">View Keys</a>

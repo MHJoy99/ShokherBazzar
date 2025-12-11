@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import { config } from '../config';
+import { TrustPilotWidget } from './TrustPilotWidget'; // Import Widget
 
 export const Footer: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -112,7 +113,7 @@ export const Footer: React.FC = () => {
                       </div>
                  </div>
                  
-                 <form onSubmit={handleSubscribe} className="relative group">
+                 <form onSubmit={handleSubscribe} className="relative group mb-6">
                      <input 
                         type="email" 
                         placeholder="Join our newsletter" 
@@ -125,6 +126,11 @@ export const Footer: React.FC = () => {
                          <i className="fas fa-paper-plane"></i>
                      </button>
                  </form>
+
+                 {/* TRUSTPILOT IN FOOTER */}
+                 <div className="opacity-80 hover:opacity-100 transition-opacity">
+                     <TrustPilotWidget />
+                 </div>
               </div>
            </div>
   
