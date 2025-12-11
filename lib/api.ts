@@ -202,7 +202,7 @@ export const api = {
   createOrder: async (data: any): Promise<{success: boolean, id: number, payment_url?: string, guest_token?: string}> => {
       // Construct WooCommerce Order Payload
       const payload = {
-          payment_method: data.payment_method === 'manual' ? 'bacs' : 'uddoktapay', // Example mapping
+          payment_method: data.payment_method === 'manual' ? 'bacs' : 'uddoktapay',
           payment_method_title: data.payment_method === 'manual' ? 'Manual Transfer' : 'Online Payment',
           set_paid: false,
           billing: {
@@ -214,7 +214,7 @@ export const api = {
           line_items: data.items.map((item: any) => ({
               product_id: item.id, 
               quantity: item.quantity,
-              // If it's a variation, pass variation_id. 
+              // Map variation_id if it's a variation
               variation_id: item.selectedVariation ? item.id : undefined 
           })),
           customer_id: data.customer_id || 0,
@@ -230,13 +230,20 @@ export const api = {
           
           let paymentUrl = order.payment_url; 
           
-          // CHECK FOR CUSTOM GATEWAY LINK IN META DATA (Common in WP plugins)
-          if (!paymentUrl && order.meta_data) {
-             const metaLink = order.meta_data.find((m: any) => m.key === 'uddoktapay_payment_url' || m.key === 'payment_link');
+          // CRITICAL FIX: Look for custom payment URLs in meta_data
+          // This is where plugins like UddoktaPay usually hide the direct link
+          if (!paymentUrl && order.meta_data && Array.isArray(order.meta_data)) {
+             const metaLink = order.meta_data.find((m: any) => 
+                m.key === 'uddoktapay_payment_url' || 
+                m.key === 'payment_link' || 
+                m.key === '_uddoktapay_payment_url' ||
+                (typeof m.value === 'string' && m.value.includes('pay.uddoktapay.com'))
+             );
              if (metaLink) paymentUrl = metaLink.value;
           }
 
-          // FALLBACK: Only if we have NO url and method is online, use manual order-pay link
+          // FALLBACK: Only if we have NO url from meta_data, use the "Ugly" page.
+          // This ensures the user can still pay even if the direct link isn't found.
           if (!paymentUrl && data.payment_method === 'uddoktapay') {
               paymentUrl = `https://admin.mhjoygamershub.com/checkout/order-pay/${order.id}/?pay_for_order=true&key=${order.order_key}`;
           }
