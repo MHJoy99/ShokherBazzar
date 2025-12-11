@@ -359,7 +359,7 @@ export const Cart: React.FC = () => {
                                     {paymentMethod === 'uddoktapay' && <div className="absolute top-2 right-2 text-primary"><i className="fas fa-check-circle"></i></div>}
                                     <div className="flex items-center gap-2 grayscale group-hover:grayscale-0 transition-all opacity-80 group-hover:opacity-100">
                                         <div className="w-10 h-10 rounded-full bg-white p-1 shadow-sm overflow-hidden flex items-center justify-center">
-                                            <img src="https://raw.githubusercontent.com/shipu/bkash-example/master/bkash_payment_logo.png" className="h-full object-contain" alt="bKash" />
+                                            <img src="https://freepnglogo.com/images/all_img/1701503524bkash-logo-transparent.png" className="h-full object-contain" alt="bKash" />
                                         </div>
                                         <div className="w-10 h-10 rounded-full bg-white p-1 shadow-sm overflow-hidden flex items-center justify-center">
                                             <img src="https://freepnglogo.com/images/all_img/1701511252nagad-logo-transparent.png" className="h-full object-contain" alt="Nagad" />
@@ -396,7 +396,7 @@ export const Cart: React.FC = () => {
                                                     <div className="flex justify-between items-center bg-dark-900 p-3 rounded border border-white/5">
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-8 h-8 rounded-full bg-white p-1 shadow-sm overflow-hidden flex items-center justify-center">
-                                                                <img src="https://raw.githubusercontent.com/shipu/bkash-example/master/bkash_payment_logo.png" className="h-full object-contain" alt="bKash" />
+                                                                <img src="https://freepnglogo.com/images/all_img/1701503524bkash-logo-transparent.png" className="h-full object-contain" alt="bKash" />
                                                             </div>
                                                             <span className="text-white font-bold text-sm">bKash Personal</span>
                                                         </div>

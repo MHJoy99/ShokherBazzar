@@ -1,7 +1,7 @@
-
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
+import { config } from '../config';
 
 export const Footer: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -44,10 +44,10 @@ export const Footer: React.FC = () => {
                   <div>
                       <h5 className="text-white text-xs font-bold uppercase mb-2">Follow Us / আমাদের অনুসরণ করুন</h5>
                       <div className="flex gap-3">
-                          <a href="https://facebook.com/mhjoygamershub" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-lg bg-dark-900 border border-white/10 flex items-center justify-center text-gray-400 hover:bg-[#1877F2] hover:text-white hover:border-[#1877F2] transition-all transform hover:-translate-y-1"><i className="fab fa-facebook-f"></i></a>
-                          <a href="https://discord.gg/zfGgdv4cWu" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-lg bg-dark-900 border border-white/10 flex items-center justify-center text-gray-400 hover:bg-[#5865F2] hover:text-white hover:border-[#5865F2] transition-all transform hover:-translate-y-1"><i className="fab fa-discord"></i></a>
-                          <a href="https://instagram.com/mhjoygamershub" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-lg bg-dark-900 border border-white/10 flex items-center justify-center text-gray-400 hover:bg-[#E4405F] hover:text-white hover:border-[#E4405F] transition-all transform hover:-translate-y-1"><i className="fab fa-instagram"></i></a>
-                          <a href="https://wa.me/01983888331" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-lg bg-dark-900 border border-white/10 flex items-center justify-center text-gray-400 hover:bg-[#25D366] hover:text-white hover:border-[#25D366] transition-all transform hover:-translate-y-1"><i className="fab fa-whatsapp"></i></a>
+                          <a href={config.social.facebook} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-lg bg-dark-900 border border-white/10 flex items-center justify-center text-gray-400 hover:bg-[#1877F2] hover:text-white hover:border-[#1877F2] transition-all transform hover:-translate-y-1"><i className="fab fa-facebook-f"></i></a>
+                          <a href={config.social.discord} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-lg bg-dark-900 border border-white/10 flex items-center justify-center text-gray-400 hover:bg-[#5865F2] hover:text-white hover:border-[#5865F2] transition-all transform hover:-translate-y-1"><i className="fab fa-discord"></i></a>
+                          <a href={config.social.instagram} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-lg bg-dark-900 border border-white/10 flex items-center justify-center text-gray-400 hover:bg-[#E4405F] hover:text-white hover:border-[#E4405F] transition-all transform hover:-translate-y-1"><i className="fab fa-instagram"></i></a>
+                          <a href={config.contact.whatsapp} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-lg bg-dark-900 border border-white/10 flex items-center justify-center text-gray-400 hover:bg-[#25D366] hover:text-white hover:border-[#25D366] transition-all transform hover:-translate-y-1"><i className="fab fa-whatsapp"></i></a>
                       </div>
                   </div>
               </div>
@@ -85,12 +85,18 @@ export const Footer: React.FC = () => {
                      <span className="w-1.5 h-1.5 bg-primary rounded-full"></span> Secure Payment / পেমেন্ট
                  </h4>
                  <p className="text-xs text-gray-500 mb-4 font-bengali">আমরা ১০০% নিরাপদ পেমেন্ট গ্রহণ করি। <span className="font-sans text-[10px] block mt-0.5">We accept 100% secure payments.</span></p>
-                 <div className="bg-dark-900 p-4 rounded-xl border border-white/5 mb-6 grid grid-cols-3 gap-2">
-                      <img src="https://raw.githubusercontent.com/sh4hids/bangladesh-payment-gateway-logos/master/bkash/bkash-logo.png" className="h-8 bg-white rounded p-1 object-contain w-full" alt="bKash" />
-                      <img src="https://raw.githubusercontent.com/sh4hids/bangladesh-payment-gateway-logos/master/nagad/nagad-logo.png" className="h-8 bg-white rounded p-1 object-contain w-full" alt="Nagad" />
-                      <img src="https://raw.githubusercontent.com/sh4hids/bangladesh-payment-gateway-logos/master/rocket/rocket-logo.png" className="h-8 bg-white rounded p-1 object-contain w-full" alt="Rocket" />
-                      <div className="bg-white rounded p-1 h-8 flex items-center justify-center"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Visa_Inc._logo.svg/2560px-Visa_Inc._logo.svg.png" className="h-full object-contain" alt="Visa" /></div>
-                      <div className="bg-white rounded p-1 h-8 flex items-center justify-center"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png" className="h-full object-contain" alt="Mastercard" /></div>
+                 
+                 {/* Updated Logos: Using highly reliable Wikimedia/Official SVGs */}
+                 <div className="bg-dark-900 p-4 rounded-xl border border-white/5 mb-6 flex flex-wrap gap-2 items-center">
+                      <div className="bg-white rounded p-1 h-8 w-12 flex items-center justify-center overflow-hidden" title="bKash">
+                          <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Bkash_logo_2022.svg/200px-Bkash_logo_2022.svg.png" className="h-full object-contain" alt="bKash" />
+                      </div>
+                      <div className="bg-white rounded p-1 h-8 w-12 flex items-center justify-center overflow-hidden" title="Visa">
+                          <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Visa_Inc._logo.svg/2560px-Visa_Inc._logo.svg.png" className="h-full object-contain" alt="Visa" />
+                      </div>
+                      <div className="bg-white rounded p-1 h-8 w-12 flex items-center justify-center overflow-hidden" title="Mastercard">
+                          <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png" className="h-full object-contain" alt="Mastercard" />
+                      </div>
                  </div>
                  
                  <form onSubmit={handleSubscribe} className="relative group">
