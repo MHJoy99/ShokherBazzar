@@ -147,62 +147,66 @@ export const api = {
   },
 
   createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string; guest_token?: string }> => {
-    console.log("🔵 DEBUG: Starting Order Creation", orderData);
+    console.group("📦 ORDER DEBUGGER");
+    console.log("Input Order Data:", orderData);
 
-    let expectedBackendTotal = 0;
-    let actualFrontendTotal = 0;
+    let calculatedGrandTotal = 0;
 
-    // 1. Build Line Items and Calculate Backend vs Frontend Totals
+    // NUCLEAR OPTION: Force every single line item to use the price we saw in the cart.
+    // We do NOT rely on backend defaults. We explicitly set 'total' and 'subtotal'.
     const line_items = orderData.items.map((item: any) => {
-        // Calculate what the backend will see (Regular Price or Sale Price if defined)
-        // If it's a variation, the price is in selectedVariation.price
-        // If simple, it's item.price (which is pre-calculated sale/regular in UI)
-        // NOTE: item.price in UI comes from 'displayPrice' which handles sale logic.
-        // However, safest bet is to check variation data if present.
-        const regularPrice = item.selectedVariation 
-            ? parseFloat(item.selectedVariation.price) 
-            : parseFloat(item.price);
+        // 1. Determine the Unit Price used in Cart
+        let unitPrice = 0;
         
-        // Calculate what we WANT (Custom Price from Calculator)
-        const customPrice = item.custom_price ? parseFloat(item.custom_price) : regularPrice;
+        if (item.custom_price) {
+            unitPrice = parseFloat(item.custom_price);
+            console.log(`💰 Item ${item.name} uses Bundle Price: ${unitPrice}`);
+        } else if (item.selectedVariation) {
+            unitPrice = parseFloat(item.selectedVariation.price);
+            console.log(`🏷️ Item ${item.name} uses Variation Price: ${unitPrice}`);
+        } else {
+            // Fallback for simple products (use sale price if valid, else regular)
+            unitPrice = item.on_sale && item.sale_price ? parseFloat(item.sale_price) : parseFloat(item.price);
+            console.log(`🛒 Item ${item.name} uses Standard Price: ${unitPrice}`);
+        }
 
-        expectedBackendTotal += regularPrice * item.quantity;
-        actualFrontendTotal += customPrice * item.quantity;
+        // 2. Calculate Line Totals
+        const lineTotal = (unitPrice * item.quantity).toFixed(2);
+        calculatedGrandTotal += parseFloat(lineTotal);
 
-        // Return standard line item structure
-        // We do NOT force 'total' here anymore to avoid backend conflict.
-        // We let backend calculate its total, then we adjust with fee.
-        return {
+        // 3. Construct Payload with Explicit Overrides
+        const payloadItem: any = {
             product_id: item.id,
             quantity: item.quantity,
             variation_id: item.selectedVariation?.id,
-            meta_data: item.custom_price ? [
-                { key: '_is_bundle_price', value: 'yes' },
-                { key: 'Bundle Unit Price', value: customPrice.toFixed(2) }
-            ] : []
+            // FORCE PRICING
+            subtotal: lineTotal,
+            total: lineTotal,
+            subtotal_tax: '0.00',
+            total_tax: '0.00',
+            tax_class: '',
+            meta_data: []
         };
+
+        // Add metadata for admins to see logic
+        if (item.custom_price) {
+            payloadItem.meta_data.push({ key: '_is_bundle_price', value: 'yes' });
+            payloadItem.meta_data.push({ key: 'Calculated Unit Price', value: unitPrice.toFixed(2) });
+        }
+
+        return payloadItem;
     });
 
-    // 2. Calculate the Difference (Fee)
-    // Example: Backend expects 1300. We want 1200.
-    // Difference = 1200 - 1300 = -100.
-    const difference = actualFrontendTotal - expectedBackendTotal;
-    const fee_lines = [];
-
-    if (Math.abs(difference) > 0.01) { 
-        console.log(`💡 DEBUG: Applying Bundle Adjustment Fee: ${difference.toFixed(2)}`);
-        fee_lines.push({
-            name: "Bundle/Custom Pricing Adjustment",
-            total: difference.toFixed(2), // Negative value acts as discount
-            tax_status: 'none'
-        });
-    }
+    console.log(`🧮 Frontend Calculated Total: ${calculatedGrandTotal.toFixed(2)}`);
 
     const meta_data = [];
     if (orderData.payment_method === 'manual') {
         meta_data.push({ key: 'bkash_trx_id', value: orderData.trxId });
         meta_data.push({ key: 'sender_number', value: orderData.senderNumber });
     }
+
+    // Force total at root level metadata just in case backend has a hook looking for it
+    meta_data.push({ key: '_frontend_total', value: calculatedGrandTotal.toFixed(2) });
 
     const payment_method_id = orderData.payment_method === 'manual' ? 'bacs' : 'uddoktapay';
     const coupon_lines = orderData.coupon_code ? [{ code: orderData.coupon_code }] : [];
@@ -212,7 +216,6 @@ export const api = {
         customer_id: orderData.customer_id || 0,
         billing: orderData.billing,
         line_items,
-        fee_lines, // <--- THE FIX
         coupon_lines,
         meta_data,
         trxId: orderData.trxId, 
@@ -220,7 +223,9 @@ export const api = {
         customer_note: orderData.payment_method === 'manual' ? `TrxID: ${orderData.trxId}` : "Headless Order"
     };
 
-    console.log("🚀 DEBUG: Final Payload Sending to Backend:", JSON.stringify(payload, null, 2));
+    console.table(payload.line_items);
+    console.log("🚀 SENDING PAYLOAD:", JSON.stringify(payload, null, 2));
+    console.groupEnd();
 
     try {
         const response = await fetch(`${CUSTOM_API_URL}/create-order`, {
@@ -231,7 +236,7 @@ export const api = {
 
         if (response.ok) {
             const data = await response.json();
-            console.log("✅ DEBUG: Order Created Successfully:", data);
+            console.log("✅ ORDER SUCCESS:", data);
             
             const baseResult = {
                 id: data.id,
@@ -240,28 +245,22 @@ export const api = {
             };
 
             if (data.payment_url) {
-                return {
-                    ...baseResult,
-                    payment_url: data.payment_url
-                };
+                return { ...baseResult, payment_url: data.payment_url };
             }
             
             if (orderData.payment_method !== 'manual' && data.order_key) {
                 const wpPayLink = `https://admin.mhjoygamershub.com/checkout/order-pay/${data.id}/?pay_for_order=true&key=${data.order_key}`;
-                return {
-                    ...baseResult,
-                    payment_url: wpPayLink
-                };
+                return { ...baseResult, payment_url: wpPayLink };
             }
 
             return baseResult;
         } else {
             const err = await response.json();
-            console.error("❌ DEBUG: Order Creation Failed Response:", err);
+            console.error("❌ ORDER FAILED:", err);
             throw new Error(err.message || 'Order creation failed');
         }
     } catch (proxyError: any) {
-        console.error("❌ DEBUG: Network/Proxy Error:", proxyError);
+        console.error("❌ NETWORK ERROR:", proxyError);
         throw proxyError;
     }
   },
@@ -311,7 +310,6 @@ export const api = {
           });
           if (response.ok) {
               const u = await response.json();
-              // Apply branded avatar
               u.avatar_url = getBrandedAvatar(u.username);
               return u;
           }
@@ -328,7 +326,6 @@ export const api = {
           });
           if (!response.ok) throw new Error("Invalid credentials");
           const u = await response.json();
-          // Apply branded avatar
           u.avatar_url = getBrandedAvatar(u.username);
           return u;
       } catch (error) { throw error; }
@@ -366,7 +363,6 @@ export const api = {
           });
           if (!response.ok) return null;
           const u = await response.json();
-          // Apply branded avatar
           u.avatar_url = getBrandedAvatar(u.username);
           return u;
       } catch (e) { return null; }
