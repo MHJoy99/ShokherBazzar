@@ -45,10 +45,6 @@ export const Cart: React.FC = () => {
       const invoice = searchParams.get('invoice_id'); 
       const token = searchParams.get('token'); // Get Token from URL
       
-      if (status === 'cancel') {
-          showToast("Payment was cancelled", "error");
-      }
-
       if ((status === 'success' || status === 'completed') && (oid || invoice)) {
           const finalId = oid ? parseInt(oid) : (invoice ? parseInt(invoice) : 0);
           setOrderId(finalId);
@@ -62,7 +58,7 @@ export const Cart: React.FC = () => {
               api.verifyPayment(finalId, invoice || undefined);
           }
       }
-  }, [searchParams, clearCart, showToast]);
+  }, [searchParams, clearCart]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -126,20 +122,23 @@ export const Cart: React.FC = () => {
              }
         }
 
-        // Generate Dynamic Return URLs
-        const successUrl = `${window.location.origin}/cart?status=success`;
-        const cancelUrl = `${window.location.origin}/cart?status=cancel`;
+        // FIX: Map items to ensure Variation ID is sent as Product ID for variable products.
+        // This forces the backend to recognize the exact variant selected.
+        const orderItems = items.map(item => {
+             if (item.selectedVariation) {
+                 return { ...item, id: item.selectedVariation.id };
+             }
+             return item;
+        });
 
         const result = await api.createOrder({ 
-            items, 
+            items: orderItems, 
             billing: formData, 
             payment_method: isFreeOrder ? 'manual' : paymentMethod, 
             trxId: paymentMethod === 'manual' ? trxId : undefined, 
             senderNumber: paymentMethod === 'manual' ? senderNumber : undefined,
             customer_id: customerId,
-            coupon_code: appliedCoupon?.code,
-            success_url: successUrl,
-            cancel_url: cancelUrl
+            coupon_code: appliedCoupon?.code
         });
 
         if (result.success) {
@@ -150,16 +149,11 @@ export const Cart: React.FC = () => {
                 clearCart();
                 setStep(3);
             } else if (result.payment_url) { 
-                // STANDARD REDIRECT BEHAVIOR
-                // We now allow all payment URLs, including internal WordPress 'order-pay' links.
-                // This ensures the user can complete payment even if the custom gateway API endpoint is missing.
                 window.location.href = result.payment_url; 
             } else { 
                 if (paymentMethod === 'uddoktapay') {
-                    // No payment URL returned at all
                     setPaymentError(true);
                 } else {
-                    // Manual payments don't need a redirect, just success.
                     clearCart();
                     setStep(3); 
                 }
