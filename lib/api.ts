@@ -26,21 +26,16 @@ const getBrandedAvatar = (username: string) => {
 };
 
 const fetchWooCommerce = async (endpoint: string, method = 'GET', body?: any) => {
-  // CACHE BUSTING: Append timestamp to URL to prevent browser/CDN caching
+  // CACHE BUSTING: Append timestamp to URL to prevent browser/CDN caching.
+  // We rely ONLY on this query param to force fresh data. 
+  // We DO NOT add Cache-Control headers because the backend CORS policy blocks them.
   const timestamp = new Date().getTime();
   const separator = endpoint.includes('?') ? '&' : '?';
-  // Only append timestamp for GET requests to force fresh data
   const url = `${WC_BASE_URL}${endpoint}${method === 'GET' ? `${separator}_t=${timestamp}` : ''}`;
 
   const config: RequestInit = {
     method,
-    headers: {
-        ...getAuthHeaders(),
-        // Strict Cache Control Headers
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-    },
+    headers: getAuthHeaders(), // Using standard headers only to avoid CORS issues
     body: body ? JSON.stringify(body) : undefined,
   };
   const response = await fetch(url, config);
