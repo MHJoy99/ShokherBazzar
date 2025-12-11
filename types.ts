@@ -42,6 +42,7 @@ export interface Product {
 export interface CartItem extends Product {
   quantity: number;
   selectedVariation?: Variation;
+  custom_price?: string; // For bundle pricing overrides
 }
 
 export interface Category {

@@ -153,7 +153,7 @@ export const Cart: React.FC = () => {
     } catch (error) { alert("Order failed. Please try again."); } finally { setLoading(false); }
   };
 
-  const getItemKey = (item: any) => `${item.id}-${item.selectedVariation?.id || 'default'}`;
+  const getItemKey = (item: any) => `${item.id}-${item.selectedVariation?.id || 'default'}-${item.custom_price || 'std'}`;
   const StepWizard = () => (
     <div className="flex items-center justify-center mb-12">
         <div className="flex items-center gap-4">
@@ -242,14 +242,33 @@ export const Cart: React.FC = () => {
                     <AnimatePresence>
                     {items.map(item => {
                         const key = getItemKey(item);
-                        const price = item.selectedVariation ? item.selectedVariation.price : (item.on_sale && item.sale_price ? item.sale_price : item.price);
+                        // Handle custom bundle price
+                        let price = item.price;
+                        if (item.custom_price) {
+                            price = item.custom_price;
+                        } else if (item.selectedVariation) {
+                            price = item.selectedVariation.price;
+                        } else if (item.on_sale && item.sale_price) {
+                            price = item.sale_price;
+                        }
+
+                        // Safety fallback for images
+                        const imgSrc = item.images && item.images.length > 0 ? item.images[0].src : "https://placehold.co/400?text=No+Image";
+
                         return (
                             <motion.div key={key} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, height: 0 }} className="bg-dark-900 p-4 rounded-xl border border-white/5 flex gap-5 items-center group">
-                            <div className="w-20 h-20 flex-shrink-0 bg-dark-950 rounded overflow-hidden border border-white/5"><img src={item.images[0].src} alt={item.name} className="w-full h-full object-cover" /></div>
-                            <div className="flex-1"><h3 className="text-white font-bold text-sm uppercase tracking-wide">{item.selectedVariation ? item.selectedVariation.name : item.name}</h3><div className="text-primary text-xs font-bold mt-1">৳{price}</div></div>
-                            <div className="flex items-center bg-dark-950 rounded border border-white/10"><button onClick={() => updateQuantity(key, item.quantity - 1)} className="w-8 h-8 text-gray-400 hover:text-white">-</button><span className="w-8 text-center text-white text-xs font-bold">{item.quantity}</span><button onClick={() => updateQuantity(key, item.quantity + 1)} className="w-8 h-8 text-gray-400 hover:text-white">+</button></div>
-                            <div className="text-right min-w-[80px]"><span className="block text-lg font-black text-white">৳{(parseFloat(price) * item.quantity).toFixed(0)}</span></div>
-                            <button onClick={() => removeFromCart(key)} className="text-gray-600 hover:text-red-500 transition-colors p-2"><i className="fas fa-times"></i></button>
+                                <div className="w-20 h-20 flex-shrink-0 bg-dark-950 rounded overflow-hidden border border-white/5">
+                                    <img src={imgSrc} alt={item.name} className="w-full h-full object-cover" />
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="text-white font-bold text-sm uppercase tracking-wide">
+                                        {item.name} {item.selectedVariation ? `- ${item.selectedVariation.name}` : ''}
+                                    </h3>
+                                    <div className="text-primary text-xs font-bold mt-1">৳{parseFloat(price).toFixed(2)}</div>
+                                </div>
+                                <div className="flex items-center bg-dark-950 rounded border border-white/10"><button onClick={() => updateQuantity(key, item.quantity - 1)} className="w-8 h-8 text-gray-400 hover:text-white">-</button><span className="w-8 text-center text-white text-xs font-bold">{item.quantity}</span><button onClick={() => updateQuantity(key, item.quantity + 1)} className="w-8 h-8 text-gray-400 hover:text-white">+</button></div>
+                                <div className="text-right min-w-[80px]"><span className="block text-lg font-black text-white">৳{(parseFloat(price) * item.quantity).toFixed(0)}</span></div>
+                                <button onClick={() => removeFromCart(key)} className="text-gray-600 hover:text-red-500 transition-colors p-2"><i className="fas fa-times"></i></button>
                             </motion.div>
                         );
                     })}

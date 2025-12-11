@@ -11,7 +11,7 @@ import { config } from '../config';
 import { SkeletonCard } from '../components/Skeleton';
 import { ProductCard } from '../components/ProductCard';
 
-// --- GIFT CARD CALCULATOR LOGIC ---
+// --- GIFT CARD CALCULATOR LOGIC (Quad Support + Flat Profit Rule) ---
 interface CalcOption {
     denom: number;
     price: number;
@@ -27,7 +27,7 @@ interface CalcResult {
     savings: number;
 }
 
-const GiftCardCalculator: React.FC<{ variations: Variation[] }> = ({ variations }) => {
+const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }> = ({ variations, product }) => {
     const [target, setTarget] = useState<string>('');
     const [result, setResult] = useState<CalcResult | null>(null);
     const [error, setError] = useState('');
@@ -39,19 +39,23 @@ const GiftCardCalculator: React.FC<{ variations: Variation[] }> = ({ variations 
         return variations.map(v => {
             // Extract number from name (e.g. "10 USD") or attributes
             const match = v.name.match(/(\d+(\.\d+)?)/);
-            const denom = match ? parseFloat(match[0]) : 0;
+            // Try attribute 'pa_denomination' if name parsing fails (common in WC)
+            const attrDenom = product.attributes?.find(a => a.name === 'pa_denomination')?.options.find(opt => v.name.includes(opt));
+            
+            let denom = match ? parseFloat(match[0]) : 0;
+            if (denom === 0 && attrDenom) denom = parseFloat(attrDenom);
+            
             const price = parseFloat(v.price);
             return (denom > 0 && price > 0) ? { denom, price, variation: v } : null;
         }).filter(Boolean) as CalcOption[];
-    }, [variations]);
+    }, [variations, product]);
 
-    // 2. Extract Exchange Rate (Reverse engineered from first card)
+    // 2. Extract Exchange Rate (Reverse engineered from first card using Flat Profit logic)
     const rate = useMemo(() => {
         if(options.length === 0) return 0;
         const card = options[0];
-        // Formula: Price = (Denom * Rate) + FlatProfit
-        // FlatProfit is likely 40 or 80. We approximate Rate.
-        // This is an estimation for display. The exact math is handled in logic below.
+        // Logic: Price = (Denom * Rate) + FlatProfit
+        // FlatProfit: <3 USD = 40 BDT, >=3 USD = 80 BDT
         const flatProfit = card.denom < 3 ? 40 : 80;
         return (card.price - flatProfit) / card.denom;
     }, [options]);
@@ -59,78 +63,141 @@ const GiftCardCalculator: React.FC<{ variations: Variation[] }> = ({ variations 
     const handleCalculate = () => {
         const val = parseFloat(target);
         if (!val || val <= 0) {
-            setError("Please enter a valid amount (e.g. 10.50)");
+            setError("Enter a valid amount (e.g. 18.49)");
             setResult(null);
             return;
         }
         setError('');
 
-        // Helper to find best combo
-        const findCombo = () => {
-             let best: { items: CalcOption[], diff: number } | null = null;
-             
-             // Check Single
-             options.forEach(a => {
-                 const diff = Math.abs(a.denom - val);
-                 if(!best || diff < best.diff) best = { items: [a], diff };
-             });
+        // Helper: Find Best Single
+        function findBestSingle(t: number) {
+            let best = null, bestDiff = Infinity;
+            options.forEach(opt => {
+                const diff = Math.abs(opt.denom - t);
+                if (diff < bestDiff) { bestDiff = diff; best = opt; }
+            });
+            return best ? { items: [best], total: best.denom } : null;
+        }
 
-             // Check Pair
-             for(let i=0; i<options.length; i++) {
-                 for(let j=i; j<options.length; j++) {
-                     const sum = options[i].denom + options[j].denom;
-                     const diff = Math.abs(sum - val);
-                     if(!best || diff < best.diff) best = { items: [options[i], options[j]], diff };
-                 }
-             }
-             
-             // Check Triple (Limit loop for performance)
-             if(!best || best.diff > 0.1) {
-                for(let i=0; i<options.length; i++) {
-                    for(let j=i; j<options.length; j++) {
-                        for(let k=j; k<options.length; k++) {
-                            const sum = options[i].denom + options[j].denom + options[k].denom;
-                            const diff = Math.abs(sum - val);
-                            if(!best || diff < best.diff) best = { items: [options[i], options[j], options[k]], diff };
+        // Helper: Find Best Pair
+        function findBestPair(t: number) {
+            let bestPair = null, bestDiff = Infinity;
+            for (let i = 0; i < options.length; i++) {
+                for (let j = i; j < options.length; j++) {
+                    const sum = options[i].denom + options[j].denom;
+                    const diff = Math.abs(sum - t);
+                    if (diff < bestDiff) { bestDiff = diff; bestPair = [options[i], options[j]]; }
+                }
+            }
+            return bestPair ? { items: bestPair, total: bestPair.reduce((s,i)=>s+i.denom,0) } : null;
+        }
+
+        // Helper: Find Best Triple
+        function findBestTriple(t: number) {
+            let bestTriple = null, bestDiff = Infinity;
+            for (let i = 0; i < options.length; i++) {
+                for (let j = i; j < options.length; j++) {
+                    for (let k = j; k < options.length; k++) {
+                        const sum = options[i].denom + options[j].denom + options[k].denom;
+                        const diff = Math.abs(sum - t);
+                        if (diff < bestDiff) { bestDiff = diff; bestTriple = [options[i], options[j], options[k]]; }
+                    }
+                }
+            }
+            return bestTriple ? { items: bestTriple, total: bestTriple.reduce((s,i)=>s+i.denom,0) } : null;
+        }
+
+        // Helper: Find Best Quad (New support)
+        function findBestQuad(t: number) {
+            let bestQuad = null, bestDiff = Infinity;
+            // Optimization: Don't nest 4 loops deeply if array is large. 
+            // Limit search space or accept basic 4-loop if options < 20.
+            if(options.length > 25) return null; // Safety break for performance
+            
+            for (let i = 0; i < options.length; i++) {
+                for (let j = i; j < options.length; j++) {
+                    for (let k = j; k < options.length; k++) {
+                        for (let m = k; m < options.length; m++) {
+                            const sum = options[i].denom + options[j].denom + options[k].denom + options[m].denom;
+                            const diff = Math.abs(sum - t);
+                            if (diff < bestDiff) { bestDiff = diff; bestQuad = [options[i], options[j], options[k], options[m]]; }
                         }
                     }
                 }
-             }
+            }
+            return bestQuad ? { items: bestQuad, total: bestQuad.reduce((s,i)=>s+i.denom,0) } : null;
+        }
 
-             return best;
-        };
+        const bestSingle = findBestSingle(val);
+        const bestPair = findBestPair(val);
+        const bestTriple = findBestTriple(val);
+        const bestQuad = findBestQuad(val);
 
-        const combo = findCombo();
+        const candidates = [];
+        if (bestSingle) candidates.push(bestSingle);
+        if (bestPair) candidates.push(bestPair);
+        if (bestTriple) candidates.push(bestTriple);
+        if (bestQuad) candidates.push(bestQuad);
 
-        if (combo && combo.items.length > 0) {
-            const items = combo.items;
-            const totalDenom = items.reduce((sum, i) => sum + i.denom, 0);
-            const totalPrice = items.reduce((sum, i) => sum + i.price, 0); // Normal price
+        // Selection Logic from JS: over20, over, under
+        let over20 = null, over = null, under = null;
+        
+        candidates.forEach(c => {
+            const t = c.total;
+            if (t >= val + 0.20) {
+                if (!over20 || t < over20.total) over20 = c;
+            } else if (t >= val) {
+                if (!over || t < over.total) over = c;
+            } else {
+                if (!under || Math.abs(val - t) < Math.abs(val - under.total)) under = c;
+            }
+        });
+
+        // Priority: Over20 -> Over -> Under (Matches your JS logic exactly)
+        const chosen = over20 || over || under;
+
+        if (chosen) {
+            const items = chosen.items;
+            const totalDenom = chosen.total;
+            const totalPrice = items.reduce((sum, i) => sum + i.price, 0); // Normal price sum
             
-            // BUNDLE LOGIC (Matches PHP)
-            // Flat profit on the TOTAL bundle amount, not per card
+            // BUNDLE CALCULATION (Matches PHP)
+            // 1. Base Cost = Total USD * Rate
+            // 2. Flat Profit = (Total USD < 3 ? 40 : 80)
             const flatProfit = totalDenom < 3 ? 40 : 80;
             const bundlePrice = (totalDenom * rate) + flatProfit;
             
-            const savings = Math.max(0, totalPrice - bundlePrice);
+            // Only apply bundle logic if items > 1. If single, standard price applies.
+            const finalPrice = items.length > 1 ? bundlePrice : totalPrice;
+            const savings = Math.max(0, totalPrice - finalPrice);
 
             setResult({
-                type: items.length === 1 ? 'single' : items.length === 2 ? 'pair' : 'triple',
+                type: items.length === 1 ? 'single' : items.length === 2 ? 'pair' : items.length === 3 ? 'triple' : 'quad',
                 items,
                 totalDenom,
                 totalPrice,
-                bundlePrice: items.length > 1 ? bundlePrice : totalPrice, // Only discount bundles
-                savings: items.length > 1 ? savings : 0
+                bundlePrice: finalPrice,
+                savings
             });
         } else {
-            setError("No suitable combination found.");
+            setError("No combination found.");
         }
     };
 
     const handleAddBundle = () => {
         if(!result) return;
+        
+        // Distribution Logic (Matches PHP: Distribute bundle price proportionally)
+        // Card Price = (Denom / TotalUSD) * BundlePrice
         result.items.forEach(item => {
-            addToCart({ ...item.variation, ...{ id: item.variation.id } } as any, 1, item.variation);
+            const customPrice = (item.denom / result.totalDenom) * result.bundlePrice;
+            // Pass customPrice to addToCart (requires CartContext update)
+            addToCart(
+                product, // Pass FULL product object to ensure images/categories are present
+                1, 
+                item.variation, 
+                customPrice.toString()
+            );
         });
         showToast(`Added ${result.items.length} items to cart!`, 'success');
     };
@@ -147,8 +214,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[] }> = ({ variations 
                 <i className="fas fa-magic text-yellow-400"></i> Smart Calculator
             </h3>
             <p className="text-gray-300 text-sm mb-6 max-w-lg">
-                Enter your desired game price (e.g. $18.49). We will find the best gift card combination and 
-                <span className="text-green-400 font-bold"> apply a bundle discount</span> to save you money!
+                Enter your desired amount (e.g. 18.49). We find the best card combo and <span className="text-green-400 font-bold">apply a bundle discount</span>!
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-6">
@@ -159,7 +225,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[] }> = ({ variations 
                         step="0.01" 
                         value={target}
                         onChange={(e) => setTarget(e.target.value)}
-                        placeholder="Target Amount (USD)" 
+                        placeholder="Target Amount" 
                         className="w-full bg-dark-950 border border-white/10 rounded-xl py-3 pl-8 pr-4 text-white focus:border-primary outline-none font-mono font-bold"
                     />
                 </div>
@@ -171,21 +237,21 @@ const GiftCardCalculator: React.FC<{ variations: Variation[] }> = ({ variations 
                 </button>
             </div>
 
-            {error && <p className="text-red-400 text-sm font-bold bg-red-500/10 p-3 rounded-lg"><i className="fas fa-exclamation-circle"></i> {error}</p>}
+            {error && <p className="text-red-400 text-sm font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20"><i className="fas fa-exclamation-circle"></i> {error}</p>}
 
             {result && (
-                <div className="bg-dark-950/80 border border-white/10 rounded-xl p-5 animate-fade-in-up">
+                <div className="bg-dark-950/80 border border-white/10 rounded-xl p-5 animate-fade-in-up shadow-2xl">
                      <div className="flex justify-between items-start mb-4 border-b border-white/5 pb-4">
                          <div>
-                             <p className="text-gray-400 text-xs uppercase font-bold">Suggestion</p>
+                             <p className="text-gray-400 text-xs uppercase font-bold">Suggested Combo</p>
                              <div className="flex flex-wrap gap-2 mt-2">
                                  {result.items.map((item, idx) => (
-                                     <span key={idx} className="bg-white/10 text-white font-mono font-bold px-2 py-1 rounded text-sm border border-white/10">
-                                         ${item.denom}
+                                     <span key={idx} className="bg-white/10 text-white font-mono font-bold px-2 py-1 rounded text-sm border border-white/10 flex items-center gap-1">
+                                         <span className="text-[10px] text-gray-500">$</span>{item.denom}
                                      </span>
                                  ))}
                              </div>
-                             <p className="text-gray-400 text-xs mt-2">Total: <span className="text-white font-bold">${result.totalDenom.toFixed(2)}</span></p>
+                             <p className="text-gray-400 text-xs mt-2">Total Value: <span className="text-white font-bold">${result.totalDenom.toFixed(2)}</span></p>
                          </div>
                          <div className="text-right">
                              <p className="text-gray-400 text-xs uppercase font-bold">Price</p>
@@ -194,7 +260,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[] }> = ({ variations 
                              )}
                              <p className="text-2xl font-black text-primary">৳{result.bundlePrice.toFixed(0)}</p>
                              {result.savings > 0 && (
-                                 <span className="bg-green-500 text-black text-[10px] font-black px-2 py-0.5 rounded uppercase">
+                                 <span className="bg-green-500 text-black text-[10px] font-black px-2 py-0.5 rounded uppercase inline-block mt-1">
                                      Save ৳{result.savings.toFixed(0)}
                                  </span>
                              )}
@@ -202,7 +268,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[] }> = ({ variations 
                      </div>
                      <button 
                         onClick={handleAddBundle}
-                        className="w-full bg-green-500 hover:bg-green-400 text-black font-black uppercase py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
+                        className="w-full bg-green-500 hover:bg-green-400 text-black font-black uppercase py-3 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-green-500/20"
                      >
                          <i className="fas fa-cart-plus"></i> Add Bundle to Cart
                      </button>
@@ -226,7 +292,7 @@ export const ProductDetail: React.FC = () => {
   const [suggestedProducts, setSuggestedProducts] = useState<Product[]>([]);
   
   // Loading States
-  const [loadingMain, setLoadingMain] = useState(!preload); // Only load if no preload
+  const [loadingMain, setLoadingMain] = useState(!preload); 
   const [loadingRelated, setLoadingRelated] = useState(true);
 
   const [selectedVariation, setSelectedVariation] = useState<Variation | null>(null);
@@ -239,45 +305,35 @@ export const ProductDetail: React.FC = () => {
       if (!slug) return;
       
       setLoadingRelated(true);
-      if (!product) {
-          setLoadingMain(true);
-      }
+      if (!product) setLoadingMain(true);
       
-      // Reset sidebar data when ID/Slug changes
       setRelatedProducts([]);
       setSuggestedProducts([]);
       window.scrollTo(0, 0);
 
-      // 2. MAIN FETCH: Get only the product details first
       const data = await api.getProduct(slug);
       setProduct(data || null);
       if (data?.variations && data.variations.length > 0) setSelectedVariation(data.variations[0]);
       
-      // 3. UNBLOCK UI: Stop loading immediately so user sees the page
       setLoadingMain(false);
 
-      // 4. BACKGROUND FETCH: Get extra data (Related/Suggested) without blocking the user
       if (data) {
             try {
-                // A. Related Cards (Sidebar)
+                // Related Cards
                 let related: Product[] = [];
                 if (data.cross_sell_ids && data.cross_sell_ids.length > 0) {
                      related = await api.getProductsByIds(data.cross_sell_ids);
                 } else if (data.categories.length > 0) {
-                     // Optimization: Fetch fewer items
                      const categorySlug = data.categories[0].slug;
                      const allInCat = await api.getProducts(categorySlug); 
                      related = allInCat.filter(p => p.id !== data.id).slice(0, 8);
                 }
                 setRelatedProducts(related);
 
-                // B. Suggested Products (Bottom)
-                // Optimization: Instead of fetching 'all', fetch a different category or just use the remaining items from above
-                // For now, we reuse the category fetch to avoid a massive DB call, or fetch 'gift-cards' as generic backup
+                // Suggested Products
                 let suggestions = related.length > 4 ? related.slice(4, 8) : [];
-                
                 if (suggestions.length < 4) {
-                    const generic = await api.getProducts('all'); // This might still be cached by browser
+                    const generic = await api.getProducts('all'); 
                     suggestions = generic
                         .filter(p => p.id !== data.id && !related.find(r => r.id === p.id))
                         .slice(0, 4);
@@ -298,6 +354,10 @@ export const ProductDetail: React.FC = () => {
 
   const isVariable = product.variations && product.variations.length > 0;
   
+  // DETECT IF THIS IS A GIFT CARD (for calculator)
+  // Logic: Check if variations look like numbers (e.g. "10", "20", "5 USD")
+  const isGiftCard = isVariable && product.variations!.some(v => /\d/.test(v.name));
+
   // Price Calculation logic
   let displayPrice = "0";
   let regularPrice = "0";
@@ -311,8 +371,6 @@ export const ProductDetail: React.FC = () => {
   }
   
   const totalPrice = (parseFloat(displayPrice) * qty).toFixed(0);
-
-  // Dynamic Content Logic
   const hasDisclaimer = product.short_description && product.short_description.trim().length > 0;
   const editionName = product.attributes?.find(a => a.name === 'Edition')?.options[0] || product.name;
 
@@ -320,7 +378,6 @@ export const ProductDetail: React.FC = () => {
     <div className="min-h-screen bg-transparent pb-32 pt-10">
       <Helmet><title>{product.name} | {config.siteName}</title></Helmet>
       
-      {/* Background Ambience */}
       <div className="fixed top-0 left-0 w-full h-[80vh] overflow-hidden pointer-events-none z-0">
          <div className="absolute inset-0 bg-gradient-to-b from-dark-900 via-dark-950 to-dark-950"></div>
          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10"></div>
@@ -328,28 +385,21 @@ export const ProductDetail: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         
-        {/* Breadcrumbs */}
         <nav className="flex items-center gap-2 text-sm text-gray-500 mb-6 font-medium">
            <Link to="/" className="hover:text-primary transition-colors uppercase text-xs tracking-wider">Home</Link> <i className="fas fa-chevron-right text-[10px] opacity-50"></i> 
            <Link to={`/category/${product.categories[0]?.slug}`} className="hover:text-white transition-colors cursor-pointer uppercase text-xs tracking-wider">{product.categories[0]?.name}</Link> <i className="fas fa-chevron-right text-[10px] opacity-50"></i> 
            <span className="text-gray-300 uppercase text-xs tracking-wider font-bold">{product.name}</span>
         </nav>
 
-        {/* HEADER SECTION (SEAGM Style) */}
         <div className="bg-gradient-to-r from-dark-800 to-dark-900 border border-white/5 rounded-2xl p-6 md:p-8 mb-8 relative overflow-hidden shadow-2xl">
              <div className="absolute top-0 right-0 w-1/3 h-full bg-primary/5 -skew-x-12 transform origin-bottom-right"></div>
              <div className="flex flex-col md:flex-row gap-8 items-start relative z-10">
-                 {/* Product Image Box */}
                  <div className="w-32 h-44 md:w-40 md:h-56 flex-shrink-0 bg-dark-950 rounded-xl overflow-hidden border-2 border-white/10 shadow-glow-sm">
                      <img src={product.images[0].src} alt={product.name} className="w-full h-full object-cover" />
                  </div>
-                 
-                 {/* Header Details */}
                  <div className="flex-1">
                      <h1 className="text-3xl md:text-5xl font-black text-white uppercase italic tracking-tight mb-4">{product.name}</h1>
-                     
                      <div className="flex flex-wrap gap-3 mb-6">
-                         {/* Dynamic Tags from WooCommerce */}
                          {product.tags && product.tags.length > 0 ? (
                              product.tags.map(tag => (
                                 <span key={tag.id} className="flex items-center gap-2 bg-dark-950 border border-white/10 px-3 py-1.5 rounded text-xs font-bold text-gray-300 uppercase tracking-wide">
@@ -357,7 +407,6 @@ export const ProductDetail: React.FC = () => {
                                 </span>
                              ))
                          ) : (
-                             // Fallback if no tags
                              <>
                                 <span className="flex items-center gap-2 bg-dark-950 border border-white/10 px-3 py-1.5 rounded text-xs font-bold text-gray-300 uppercase tracking-wide">
                                     <img src="https://flagcdn.com/w20/bd.png" className="w-4 rounded-sm" alt="BD" /> Region: Global / BD
@@ -367,14 +416,7 @@ export const ProductDetail: React.FC = () => {
                                 </span>
                              </>
                          )}
-                         
-                         {product.platform && (
-                            <span className="flex items-center gap-2 bg-dark-950 border border-white/10 px-3 py-1.5 rounded text-xs font-bold text-gray-300 uppercase tracking-wide">
-                                <i className="fas fa-gamepad"></i> {product.platform}
-                            </span>
-                         )}
                      </div>
-
                      {hasDisclaimer && (
                          <div className="bg-white/5 border-l-4 border-yellow-500 p-4 rounded-r-lg">
                              <p className="text-gray-400 text-xs md:text-sm leading-relaxed">
@@ -387,19 +429,13 @@ export const ProductDetail: React.FC = () => {
              </div>
         </div>
 
-
-        {/* MAIN CONTENT GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          {/* LEFT COLUMN: OPTIONS & DESCRIPTION (lg:col-span-8) */}
           <div className="lg:col-span-8 space-y-8">
-
-             {/* GIFT CARD CALCULATOR */}
-             {isVariable && product.variations && product.variations.length > 0 && (
-                 <GiftCardCalculator variations={product.variations} />
+             {/* GIFT CARD CALCULATOR - Only show if it looks like a gift card */}
+             {isGiftCard && product.variations && (
+                 <GiftCardCalculator variations={product.variations} product={product} />
              )}
              
-             {/* VARIATION SELECTOR */}
              {isVariable ? (
                 <div className="bg-dark-900 border border-white/5 rounded-2xl p-6 shadow-xl">
                     <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-6 border-b border-white/5 pb-4">Select Denomination</h3>
@@ -432,12 +468,9 @@ export const ProductDetail: React.FC = () => {
                     </div>
                 </div>
              ) : (
-                 // Single Product View (No Variations)
                  <div className="bg-dark-900 border border-white/5 rounded-2xl p-6 shadow-xl flex items-center gap-6">
                       <div className="w-16 h-16 bg-primary/20 text-primary rounded-xl flex items-center justify-center text-3xl"><i className="fas fa-check-circle"></i></div>
-                      <div>
-                          <h3 className="text-white font-bold text-lg uppercase">{editionName}</h3>
-                      </div>
+                      <div><h3 className="text-white font-bold text-lg uppercase">{editionName}</h3></div>
                       <div className="ml-auto text-right">
                           <div className="text-sm text-gray-500 line-through">৳{product.regular_price}</div>
                           <div className="text-3xl font-black text-white">৳{product.price}</div>
@@ -445,7 +478,6 @@ export const ProductDetail: React.FC = () => {
                  </div>
              )}
 
-             {/* DESCRIPTION & TABS */}
              <div className="bg-dark-900 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
                  <div className="flex border-b border-white/5 bg-dark-950/50">
                     {['desc', 'redeem', 'specs'].map((tab) => (
@@ -482,16 +514,10 @@ export const ProductDetail: React.FC = () => {
              </div>
           </div>
 
-
-          {/* RIGHT COLUMN: STICKY SIDEBAR (lg:col-span-4) */}
           <div className="lg:col-span-4">
              <div className="sticky top-24 space-y-6">
-                
-                {/* BUY CARD */}
                 <div className="bg-dark-900 border border-white/5 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-blue-600"></div>
-                    
-                    {/* Quantity */}
                     <div className="bg-dark-950 rounded-xl p-4 border border-white/5 mb-6 flex items-center justify-between">
                         <span className="text-gray-400 text-xs font-bold uppercase">Quantity</span>
                         <div className="flex items-center gap-3">
@@ -500,8 +526,6 @@ export const ProductDetail: React.FC = () => {
                             <button onClick={() => setQty(qty+1)} className="w-8 h-8 rounded bg-dark-800 hover:bg-white/10 text-white flex items-center justify-center transition-colors">+</button>
                         </div>
                     </div>
-
-                    {/* Total */}
                     <div className="flex justify-between items-end mb-8 border-b border-white/5 pb-6">
                         <span className="text-gray-400 text-sm font-bold uppercase">Total Price</span>
                         <div className="text-right">
@@ -512,8 +536,6 @@ export const ProductDetail: React.FC = () => {
                              <div className="text-[10px] text-gray-500 font-mono mt-1">Credits Earned: {(parseFloat(totalPrice) * 0.01).toFixed(0)}</div>
                         </div>
                     </div>
-
-                    {/* Actions */}
                     <div className="space-y-3">
                         <button 
                             onClick={() => { 
@@ -527,14 +549,9 @@ export const ProductDetail: React.FC = () => {
                         <button onClick={() => addToCart(product, qty, selectedVariation || undefined)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold uppercase tracking-wider py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95">
                             <i className="fas fa-cart-plus"></i> Add to Cart
                         </button>
-                        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-white/5 justify-center">
-                           <input type="checkbox" id="save" className="rounded bg-dark-950 border-white/10 text-primary focus:ring-0" />
-                           <label htmlFor="save" className="text-xs text-gray-400 cursor-pointer hover:text-white">Save for future purchase</label>
-                        </div>
                     </div>
                 </div>
 
-                {/* TRUST BADGES */}
                 <div className="grid grid-cols-2 gap-4">
                    <div className="bg-dark-900 border border-white/5 rounded-xl p-4 flex items-center gap-3">
                        <i className="fas fa-shield-alt text-green-500 text-xl"></i>
@@ -546,7 +563,6 @@ export const ProductDetail: React.FC = () => {
                    </div>
                 </div>
 
-                {/* RELATED CARDS (SIDEBAR LIST) */}
                 <div className="bg-dark-900 border border-white/5 rounded-2xl overflow-hidden shadow-xl min-h-[100px]">
                     <div className="bg-dark-950 p-4 border-b border-white/5 flex justify-between items-center">
                         <h4 className="text-white font-bold text-xs uppercase tracking-wider">Related Cards</h4>
@@ -556,9 +572,7 @@ export const ProductDetail: React.FC = () => {
                     </div>
                     
                     {loadingRelated ? (
-                        <div className="p-4 space-y-4">
-                            {[1,2,3].map(i => <div key={i} className="h-12 bg-white/5 rounded animate-pulse"></div>)}
-                        </div>
+                        <div className="p-4 space-y-4">{[1,2,3].map(i => <div key={i} className="h-12 bg-white/5 rounded animate-pulse"></div>)}</div>
                     ) : relatedProducts.length > 0 ? (
                         <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
                             {relatedProducts.map(p => (
@@ -573,9 +587,7 @@ export const ProductDetail: React.FC = () => {
                                             <span className="text-[9px] text-gray-500">Global</span>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <span className="block text-primary text-xs font-bold">৳{p.price}</span>
-                                    </div>
+                                    <div className="text-right"><span className="block text-primary text-xs font-bold">৳{p.price}</span></div>
                                 </Link>
                             ))}
                         </div>
@@ -583,22 +595,14 @@ export const ProductDetail: React.FC = () => {
                         <div className="p-4 text-center text-gray-500 text-xs">No related items.</div>
                     )}
                 </div>
-
              </div>
           </div>
-
         </div>
 
-        {/* SUGGESTED PRODUCTS (BOTTOM GRID) */}
         <div className="mt-24 border-t border-white/5 pt-12">
-            <div className="flex items-center justify-between mb-8">
-                <h2 className="text-2xl font-black text-white uppercase italic tracking-wide">You Might Also Like</h2>
-            </div>
-            
+            <h2 className="text-2xl font-black text-white uppercase italic tracking-wide mb-8">You Might Also Like</h2>
             {loadingRelated ? (
-                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                     {[1,2,3,4].map(i => <SkeletonCard key={i} />)}
-                 </div>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">{[1,2,3,4].map(i => <SkeletonCard key={i} />)}</div>
             ) : suggestedProducts.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">{suggestedProducts.map(p => (<ProductCard key={p.id} product={p} />))}</div>
             ) : (
@@ -607,14 +611,10 @@ export const ProductDetail: React.FC = () => {
         </div>
       </div>
       
-      {/* MOBILE STICKY FOOTER */}
       <div className="fixed bottom-0 left-0 w-full bg-dark-900 border-t border-white/10 p-4 z-50 md:hidden flex items-center justify-between gap-4 shadow-2xl">
           <div><p className="text-[10px] text-gray-500 uppercase font-bold">Total</p><p className="text-xl font-black text-white">৳{totalPrice}</p></div>
           <button 
-              onClick={() => { 
-                  addToCart(product, qty, selectedVariation || undefined); 
-                  navigate('/cart'); 
-              }} 
+              onClick={() => { addToCart(product, qty, selectedVariation || undefined); navigate('/cart'); }} 
               className="bg-primary text-black font-black uppercase italic py-3 px-8 rounded shadow-glow flex-1"
           >
               Buy Now
