@@ -11,6 +11,18 @@ import { config } from '../config';
 import { SkeletonCard } from '../components/Skeleton';
 import { ProductCard } from '../components/ProductCard';
 
+// --- CONFIG: SUPPORTED CURRENCIES & FALLBACK RATES ---
+const CURRENCY_MAP: Record<string, { label: string; flag: string; fallback: number }> = {
+    USD: { label: "USD", flag: "🇺🇸", fallback: 1 },
+    UAH: { label: "UAH", flag: "🇺🇦", fallback: 41.60 }, // Ukraine
+    INR: { label: "INR", flag: "🇮🇳", fallback: 84.10 }, // India
+    TRY: { label: "TRY", flag: "🇹🇷", fallback: 34.25 }, // Turkey
+    ARS: { label: "ARS", flag: "🇦🇷", fallback: 980.50 }, // Argentina
+    EUR: { label: "EUR", flag: "🇪🇺", fallback: 0.93 },  // Euro
+    BRL: { label: "BRL", flag: "🇧🇷", fallback: 5.75 },  // Brazil
+    PLN: { label: "PLN", flag: "🇵🇱", fallback: 3.96 },  // Poland
+};
+
 // --- GIFT CARD CALCULATOR LOGIC (Quad Support + Flat Profit Rule) ---
 interface CalcOption {
     denom: number;
@@ -25,21 +37,42 @@ interface CalcResult {
     totalPrice: number;
     bundlePrice: number;
     savings: number;
+    originalTarget: number;
+    currency: string;
 }
 
 const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }> = ({ variations, product }) => {
     const [target, setTarget] = useState<string>('');
+    const [selectedCurrency, setSelectedCurrency] = useState('USD');
+    const [conversionRates, setConversionRates] = useState<Record<string, number>>({});
+    
     const [result, setResult] = useState<CalcResult | null>(null);
     const [error, setError] = useState('');
     const { addToCart } = useCart();
     const { showToast } = useToast();
 
+    // 0. Init Rates
+    useEffect(() => {
+        // Load Fallbacks
+        const initial: Record<string, number> = {};
+        Object.entries(CURRENCY_MAP).forEach(([key, val]) => initial[key] = val.fallback);
+        setConversionRates(initial);
+
+        // Try Live Fetch
+        fetch('https://api.frankfurter.app/latest?from=USD')
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.rates) {
+                    setConversionRates(prev => ({ ...prev, ...data.rates }));
+                }
+            })
+            .catch(() => { /* Silent fail to fallbacks */ });
+    }, []);
+
     // 1. Parse Variations into usable numbers
     const options: CalcOption[] = useMemo(() => {
         return variations.map(v => {
-            // Extract number from name (e.g. "10 USD") or attributes
             const match = v.name.match(/(\d+(\.\d+)?)/);
-            // Try attribute 'pa_denomination' if name parsing fails (common in WC)
             const attrDenom = product.attributes?.find(a => a.name === 'pa_denomination')?.options.find(opt => v.name.includes(opt));
             
             let denom = match ? parseFloat(match[0]) : 0;
@@ -50,24 +83,27 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
         }).filter(Boolean) as CalcOption[];
     }, [variations, product]);
 
-    // 2. Extract Exchange Rate (Reverse engineered from first card using Flat Profit logic)
+    // 2. Extract Exchange Rate (Reverse engineered)
     const rate = useMemo(() => {
         if(options.length === 0) return 0;
         const card = options[0];
-        // Logic: Price = (Denom * Rate) + FlatProfit
-        // FlatProfit: <3 USD = 40 BDT, >=3 USD = 80 BDT
         const flatProfit = card.denom < 3 ? 40 : 80;
         return (card.price - flatProfit) / card.denom;
     }, [options]);
 
     const handleCalculate = () => {
-        const val = parseFloat(target);
-        if (!val || val <= 0) {
-            setError("Enter a valid amount (e.g. 18.49)");
+        const rawVal = parseFloat(target);
+        if (!rawVal || rawVal <= 0) {
+            setError("Enter a valid amount.");
             setResult(null);
             return;
         }
         setError('');
+
+        // CONVERSION LOGIC
+        const exchangeRate = conversionRates[selectedCurrency] || 1;
+        // If USD, target is direct. If other, convert Local -> USD
+        const targetUSD = selectedCurrency === 'USD' ? rawVal : (rawVal / exchangeRate);
 
         // Helper: Find Best Single
         function findBestSingle(t: number) {
@@ -107,13 +143,10 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
             return bestTriple ? { items: bestTriple, total: bestTriple.reduce((s,i)=>s+i.denom,0) } : null;
         }
 
-        // Helper: Find Best Quad (New support)
+        // Helper: Find Best Quad
         function findBestQuad(t: number) {
             let bestQuad = null, bestDiff = Infinity;
-            // Optimization: Don't nest 4 loops deeply if array is large. 
-            // Limit search space or accept basic 4-loop if options < 20.
-            if(options.length > 25) return null; // Safety break for performance
-            
+            if(options.length > 25) return null; // Performance brake
             for (let i = 0; i < options.length; i++) {
                 for (let j = i; j < options.length; j++) {
                     for (let k = j; k < options.length; k++) {
@@ -128,10 +161,10 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
             return bestQuad ? { items: bestQuad, total: bestQuad.reduce((s,i)=>s+i.denom,0) } : null;
         }
 
-        const bestSingle = findBestSingle(val);
-        const bestPair = findBestPair(val);
-        const bestTriple = findBestTriple(val);
-        const bestQuad = findBestQuad(val);
+        const bestSingle = findBestSingle(targetUSD);
+        const bestPair = findBestPair(targetUSD);
+        const bestTriple = findBestTriple(targetUSD);
+        const bestQuad = findBestQuad(targetUSD);
 
         const candidates = [];
         if (bestSingle) candidates.push(bestSingle);
@@ -139,35 +172,30 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
         if (bestTriple) candidates.push(bestTriple);
         if (bestQuad) candidates.push(bestQuad);
 
-        // Selection Logic from JS: over20, over, under
+        // Priority: Over20 -> Over -> Under
         let over20 = null, over = null, under = null;
         
         candidates.forEach(c => {
             const t = c.total;
-            if (t >= val + 0.20) {
+            if (t >= targetUSD + 0.20) {
                 if (!over20 || t < over20.total) over20 = c;
-            } else if (t >= val) {
+            } else if (t >= targetUSD) {
                 if (!over || t < over.total) over = c;
             } else {
-                if (!under || Math.abs(val - t) < Math.abs(val - under.total)) under = c;
+                if (!under || Math.abs(targetUSD - t) < Math.abs(targetUSD - under.total)) under = c;
             }
         });
 
-        // Priority: Over20 -> Over -> Under (Matches your JS logic exactly)
         const chosen = over20 || over || under;
 
         if (chosen) {
             const items = chosen.items;
             const totalDenom = chosen.total;
-            const totalPrice = items.reduce((sum, i) => sum + i.price, 0); // Normal price sum
+            const totalPrice = items.reduce((sum, i) => sum + i.price, 0); 
             
-            // BUNDLE CALCULATION (Matches PHP)
-            // 1. Base Cost = Total USD * Rate
-            // 2. Flat Profit = (Total USD < 3 ? 40 : 80)
+            // BUNDLE CALCULATION (Flat Profit Rule)
             const flatProfit = totalDenom < 3 ? 40 : 80;
             const bundlePrice = (totalDenom * rate) + flatProfit;
-            
-            // Only apply bundle logic if items > 1. If single, standard price applies.
             const finalPrice = items.length > 1 ? bundlePrice : totalPrice;
             const savings = Math.max(0, totalPrice - finalPrice);
 
@@ -177,7 +205,9 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                 totalDenom,
                 totalPrice,
                 bundlePrice: finalPrice,
-                savings
+                savings,
+                originalTarget: rawVal,
+                currency: selectedCurrency
             });
         } else {
             setError("No combination found.");
@@ -186,18 +216,9 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
 
     const handleAddBundle = () => {
         if(!result) return;
-        
-        // Distribution Logic (Matches PHP: Distribute bundle price proportionally)
-        // Card Price = (Denom / TotalUSD) * BundlePrice
         result.items.forEach(item => {
             const customPrice = (item.denom / result.totalDenom) * result.bundlePrice;
-            // Pass customPrice to addToCart (requires CartContext update)
-            addToCart(
-                product, // Pass FULL product object to ensure images/categories are present
-                1, 
-                item.variation, 
-                customPrice.toString()
-            );
+            addToCart(product, 1, item.variation, customPrice.toString());
         });
         showToast(`Added ${result.items.length} items to cart!`, 'success');
     };
@@ -206,7 +227,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
 
     return (
         <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 rounded-2xl p-6 mb-8 relative overflow-hidden shadow-2xl">
-            <div className="absolute top-0 right-0 p-4 opacity-10">
+            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
                 <i className="fas fa-calculator text-6xl text-white"></i>
             </div>
             
@@ -214,20 +235,38 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                 <i className="fas fa-magic text-yellow-400"></i> Smart Calculator
             </h3>
             <p className="text-gray-300 text-sm mb-6 max-w-lg">
-                Enter your desired amount (e.g. 18.49). We find the best card combo and <span className="text-green-400 font-bold">apply a bundle discount</span>!
+                Enter amount in <span className="text-white font-bold">ANY Currency</span>. We'll find the best USD card combo for your region!
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-6">
-                <div className="relative flex-1 w-full sm:w-auto">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-                    <input 
-                        type="number" 
-                        step="0.01" 
-                        value={target}
-                        onChange={(e) => setTarget(e.target.value)}
-                        placeholder="Target Amount" 
-                        className="w-full bg-dark-950 border border-white/10 rounded-xl py-3 pl-8 pr-4 text-white focus:border-primary outline-none font-mono font-bold"
-                    />
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-4">
+                <div className="relative flex-1 w-full sm:w-auto flex gap-2">
+                    
+                    {/* CURRENCY SELECTOR */}
+                    <div className="relative min-w-[110px]">
+                         <select 
+                            value={selectedCurrency}
+                            onChange={(e) => setSelectedCurrency(e.target.value)}
+                            className="w-full h-full bg-dark-950 border border-white/10 rounded-xl pl-3 pr-8 py-3 text-white appearance-none focus:border-primary outline-none font-bold text-sm cursor-pointer shadow-inner"
+                         >
+                             {Object.entries(CURRENCY_MAP).map(([code, info]) => (
+                                 <option key={code} value={code}>{info.flag} {code}</option>
+                             ))}
+                         </select>
+                         <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 text-xs">
+                             <i className="fas fa-chevron-down"></i>
+                         </div>
+                    </div>
+
+                    <div className="relative flex-1">
+                        <input 
+                            type="number" 
+                            step="0.01" 
+                            value={target}
+                            onChange={(e) => setTarget(e.target.value)}
+                            placeholder={selectedCurrency === 'USD' ? "Amount (e.g. 18.49)" : `Amount in ${selectedCurrency}`}
+                            className="w-full bg-dark-950 border border-white/10 rounded-xl py-3 px-4 text-white focus:border-primary outline-none font-mono font-bold shadow-inner"
+                        />
+                    </div>
                 </div>
                 <button 
                     onClick={handleCalculate}
@@ -237,30 +276,49 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                 </button>
             </div>
 
+            {/* LIVE RATE INDICATOR */}
+            {selectedCurrency !== 'USD' && conversionRates[selectedCurrency] && (
+                <p className="text-[10px] text-gray-400 font-mono mb-4 text-center sm:text-left bg-black/20 inline-block px-2 py-1 rounded border border-white/5">
+                    <i className="fas fa-exchange-alt mr-1"></i>
+                    1 USD ≈ {conversionRates[selectedCurrency]?.toFixed(2)} {selectedCurrency}
+                </p>
+            )}
+
             {error && <p className="text-red-400 text-sm font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20"><i className="fas fa-exclamation-circle"></i> {error}</p>}
 
             {result && (
                 <div className="bg-dark-950/80 border border-white/10 rounded-xl p-5 animate-fade-in-up shadow-2xl">
                      <div className="flex justify-between items-start mb-4 border-b border-white/5 pb-4">
                          <div>
-                             <p className="text-gray-400 text-xs uppercase font-bold">Suggested Combo</p>
+                             <p className="text-gray-400 text-xs uppercase font-bold">You Get (Approx)</p>
+                             <p className="text-white font-bold text-lg mb-1">
+                                 {result.currency === 'USD' ? (
+                                     `$${result.totalDenom.toFixed(2)} USD`
+                                 ) : (
+                                     `${(result.totalDenom * (conversionRates[result.currency] || 1)).toFixed(0)} ${result.currency}`
+                                 )}
+                             </p>
+                             
                              <div className="flex flex-wrap gap-2 mt-2">
                                  {result.items.map((item, idx) => (
-                                     <span key={idx} className="bg-white/10 text-white font-mono font-bold px-2 py-1 rounded text-sm border border-white/10 flex items-center gap-1">
-                                         <span className="text-[10px] text-gray-500">$</span>{item.denom}
+                                     <span key={idx} className="bg-white/10 text-white font-mono font-bold px-2 py-1 rounded text-xs border border-white/10 flex items-center gap-1">
+                                         <span className="text-[9px] text-gray-500">$</span>{item.denom}
                                      </span>
                                  ))}
                              </div>
-                             <p className="text-gray-400 text-xs mt-2">Total Value: <span className="text-white font-bold">${result.totalDenom.toFixed(2)}</span></p>
+                             
+                             {result.currency !== 'USD' && (
+                                <p className="text-gray-500 text-[10px] mt-2 italic">Actual Steam conversion may vary slightly.</p>
+                             )}
                          </div>
                          <div className="text-right">
-                             <p className="text-gray-400 text-xs uppercase font-bold">Price</p>
+                             <p className="text-gray-400 text-xs uppercase font-bold">Your Price</p>
                              {result.savings > 0 && (
                                  <p className="text-xs text-red-400 line-through font-mono">৳{result.totalPrice.toFixed(0)}</p>
                              )}
                              <p className="text-2xl font-black text-primary">৳{result.bundlePrice.toFixed(0)}</p>
                              {result.savings > 0 && (
-                                 <span className="bg-green-500 text-black text-[10px] font-black px-2 py-0.5 rounded uppercase inline-block mt-1">
+                                 <span className="bg-green-500 text-black text-[10px] font-black px-2 py-0.5 rounded uppercase inline-block mt-1 animate-pulse">
                                      Save ৳{result.savings.toFixed(0)}
                                  </span>
                              )}
@@ -355,7 +413,6 @@ export const ProductDetail: React.FC = () => {
   const isVariable = product.variations && product.variations.length > 0;
   
   // DETECT IF THIS IS A GIFT CARD (for calculator)
-  // Logic: Check if variations look like numbers (e.g. "10", "20", "5 USD")
   const isGiftCard = isVariable && product.variations!.some(v => /\d/.test(v.name));
 
   // Price Calculation logic
