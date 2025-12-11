@@ -34,6 +34,7 @@ export const Cart: React.FC = () => {
 
   // ERROR MODAL STATE
   const [paymentError, setPaymentError] = useState(false);
+  const [securityError, setSecurityError] = useState('');
 
   // NEW: Detect return from Payment Gateway
   const [searchParams] = useSearchParams();
@@ -105,6 +106,8 @@ export const Cart: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setPaymentError(false);
+    setSecurityError('');
+    
     try {
         let customerId = user?.id;
 
@@ -150,7 +153,17 @@ export const Cart: React.FC = () => {
                 }
             }
         }
-    } catch (error) { alert("Order failed. Please try again."); } finally { setLoading(false); }
+    } catch (error: any) { 
+        // Display precise error from backend if available
+        const errMsg = error.message || "Order creation failed.";
+        if (errMsg.includes("Security Check") || errMsg.includes("Discount amount")) {
+            setSecurityError(errMsg);
+        } else {
+            alert("Order failed. Please try again.");
+        }
+    } finally { 
+        setLoading(false); 
+    }
   };
 
   const getItemKey = (item: any) => `${item.id}-${item.selectedVariation?.id || 'default'}-${item.custom_price || 'std'}`;
@@ -207,6 +220,26 @@ export const Cart: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 min-h-screen">
       <Helmet><title>Checkout | {config.siteName}</title></Helmet>
       
+      {/* SECURITY ERROR MODAL */}
+      {securityError && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+               <div className="bg-dark-900 border-2 border-red-500 rounded-2xl w-full max-w-md p-8 shadow-2xl relative text-center">
+                   <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500 text-3xl">
+                       <i className="fas fa-shield-alt"></i>
+                   </div>
+                   <h2 className="text-xl font-black uppercase text-white mb-2">Security Alert</h2>
+                   <p className="text-gray-400 mb-6 text-sm">
+                       {securityError}
+                       <br/><br/>
+                       The system detected a pricing discrepancy. Please refresh your cart and try again.
+                   </p>
+                   <button onClick={() => setSecurityError('')} className="w-full bg-gray-700 text-white font-bold uppercase py-3 rounded-xl hover:bg-gray-600">
+                       Dismiss
+                   </button>
+               </div>
+          </div>
+      )}
+
       {/* ERROR MODAL FOR FAILED GATEWAY */}
       {paymentError && (
            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
