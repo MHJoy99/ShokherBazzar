@@ -21,7 +21,6 @@ const getAuthHeaders = () => {
 };
 
 // HELPER: Generate Branded Avatar
-// Creates a stylish "Initials" avatar (e.g. "MH") using brand colors (Dark BG, Cyan Text)
 const getBrandedAvatar = (username: string) => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=0f172a&color=06b6d4&bold=true&size=128&font-size=0.33`;
 };
@@ -148,31 +147,56 @@ export const api = {
   },
 
   createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string; guest_token?: string }> => {
-    // Construct line items with explicit custom price override for Bundles
+    console.log("🔵 DEBUG: Starting Order Creation", orderData);
+
+    let expectedBackendTotal = 0;
+    let actualFrontendTotal = 0;
+
+    // 1. Build Line Items and Calculate Backend vs Frontend Totals
     const line_items = orderData.items.map((item: any) => {
-        const lineItem: any = {
+        // Calculate what the backend will see (Regular Price or Sale Price if defined)
+        // If it's a variation, the price is in selectedVariation.price
+        // If simple, it's item.price (which is pre-calculated sale/regular in UI)
+        // NOTE: item.price in UI comes from 'displayPrice' which handles sale logic.
+        // However, safest bet is to check variation data if present.
+        const regularPrice = item.selectedVariation 
+            ? parseFloat(item.selectedVariation.price) 
+            : parseFloat(item.price);
+        
+        // Calculate what we WANT (Custom Price from Calculator)
+        const customPrice = item.custom_price ? parseFloat(item.custom_price) : regularPrice;
+
+        expectedBackendTotal += regularPrice * item.quantity;
+        actualFrontendTotal += customPrice * item.quantity;
+
+        // Return standard line item structure
+        // We do NOT force 'total' here anymore to avoid backend conflict.
+        // We let backend calculate its total, then we adjust with fee.
+        return {
             product_id: item.id,
             quantity: item.quantity,
-            variation_id: item.selectedVariation?.id
-        };
-
-        // IMPORTANT: If this item comes from the Calculator with a custom price,
-        // we must explicitly tell the backend the 'total' and 'subtotal'.
-        // Otherwise, WooCommerce will recalculate using the database price (which is cheaper).
-        if (item.custom_price) {
-            const lineTotal = (parseFloat(item.custom_price) * item.quantity).toFixed(2);
-            lineItem.subtotal = lineTotal;
-            lineItem.total = lineTotal;
-            
-            // Add metadata so admins know this was a calculator bundle
-            lineItem.meta_data = [
+            variation_id: item.selectedVariation?.id,
+            meta_data: item.custom_price ? [
                 { key: '_is_bundle_price', value: 'yes' },
-                { key: 'Unit Price', value: `${parseFloat(item.custom_price).toFixed(2)}` }
-            ];
-        }
-        
-        return lineItem;
+                { key: 'Bundle Unit Price', value: customPrice.toFixed(2) }
+            ] : []
+        };
     });
+
+    // 2. Calculate the Difference (Fee)
+    // Example: Backend expects 1300. We want 1200.
+    // Difference = 1200 - 1300 = -100.
+    const difference = actualFrontendTotal - expectedBackendTotal;
+    const fee_lines = [];
+
+    if (Math.abs(difference) > 0.01) { 
+        console.log(`💡 DEBUG: Applying Bundle Adjustment Fee: ${difference.toFixed(2)}`);
+        fee_lines.push({
+            name: "Bundle/Custom Pricing Adjustment",
+            total: difference.toFixed(2), // Negative value acts as discount
+            tax_status: 'none'
+        });
+    }
 
     const meta_data = [];
     if (orderData.payment_method === 'manual') {
@@ -188,12 +212,15 @@ export const api = {
         customer_id: orderData.customer_id || 0,
         billing: orderData.billing,
         line_items,
+        fee_lines, // <--- THE FIX
         coupon_lines,
         meta_data,
         trxId: orderData.trxId, 
         senderNumber: orderData.senderNumber, 
         customer_note: orderData.payment_method === 'manual' ? `TrxID: ${orderData.trxId}` : "Headless Order"
     };
+
+    console.log("🚀 DEBUG: Final Payload Sending to Backend:", JSON.stringify(payload, null, 2));
 
     try {
         const response = await fetch(`${CUSTOM_API_URL}/create-order`, {
@@ -204,15 +231,14 @@ export const api = {
 
         if (response.ok) {
             const data = await response.json();
+            console.log("✅ DEBUG: Order Created Successfully:", data);
             
-            // Return token if available
             const baseResult = {
                 id: data.id,
                 success: true,
                 guest_token: data.guest_token
             };
 
-            // 1. Try Direct Gateway Link
             if (data.payment_url) {
                 return {
                     ...baseResult,
@@ -220,7 +246,6 @@ export const api = {
                 };
             }
             
-            // 2. Fallback to WP Checkout
             if (orderData.payment_method !== 'manual' && data.order_key) {
                 const wpPayLink = `https://admin.mhjoygamershub.com/checkout/order-pay/${data.id}/?pay_for_order=true&key=${data.order_key}`;
                 return {
@@ -232,10 +257,11 @@ export const api = {
             return baseResult;
         } else {
             const err = await response.json();
+            console.error("❌ DEBUG: Order Creation Failed Response:", err);
             throw new Error(err.message || 'Order creation failed');
         }
     } catch (proxyError: any) {
-        console.error("Order Failed:", proxyError);
+        console.error("❌ DEBUG: Network/Proxy Error:", proxyError);
         throw proxyError;
     }
   },
