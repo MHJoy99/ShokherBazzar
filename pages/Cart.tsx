@@ -149,14 +149,14 @@ export const Cart: React.FC = () => {
             if (isFreeOrder) {
                 clearCart();
                 setStep(3);
-            } else if (result.payment_url && !result.payment_url.includes('order-pay')) { 
-                // FIX: Only redirect if it's a REAL gateway URL (e.g. sandbox.uddoktapay.com)
-                // If the URL contains 'order-pay', it's the internal WP page, which we want to avoid.
+            } else if (result.payment_url) { 
+                // STANDARD REDIRECT BEHAVIOR
+                // We now allow all payment URLs, including internal WordPress 'order-pay' links.
+                // This ensures the user can complete payment even if the custom gateway API endpoint is missing.
                 window.location.href = result.payment_url; 
             } else { 
                 if (paymentMethod === 'uddoktapay') {
-                    // If we get here, it means we got an internal WP link or no link at all.
-                    // This counts as a failure for "Automated Payment" in headless mode.
+                    // No payment URL returned at all
                     setPaymentError(true);
                 } else {
                     // Manual payments don't need a redirect, just success.
