@@ -147,66 +147,62 @@ export const api = {
   },
 
   createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string; guest_token?: string }> => {
-    console.group("📦 ORDER DEBUGGER");
+    console.group("📦 ORDER PRICING FIX (ZERO + FEE STRATEGY)");
     console.log("Input Order Data:", orderData);
 
     let calculatedGrandTotal = 0;
 
-    // NUCLEAR OPTION: Force every single line item to use the price we saw in the cart.
-    // We do NOT rely on backend defaults. We explicitly set 'total' and 'subtotal'.
+    // 1. Build Line Items but FORCE ZERO PRICE
+    // This stops backend from using its database prices (148.80)
     const line_items = orderData.items.map((item: any) => {
-        // 1. Determine the Unit Price used in Cart
+        // Calculate the REAL price we want to charge
         let unitPrice = 0;
         
         if (item.custom_price) {
             unitPrice = parseFloat(item.custom_price);
-            console.log(`💰 Item ${item.name} uses Bundle Price: ${unitPrice}`);
         } else if (item.selectedVariation) {
             unitPrice = parseFloat(item.selectedVariation.price);
-            console.log(`🏷️ Item ${item.name} uses Variation Price: ${unitPrice}`);
         } else {
-            // Fallback for simple products (use sale price if valid, else regular)
             unitPrice = item.on_sale && item.sale_price ? parseFloat(item.sale_price) : parseFloat(item.price);
-            console.log(`🛒 Item ${item.name} uses Standard Price: ${unitPrice}`);
         }
 
-        // 2. Calculate Line Totals
+        // Accumulate correct total
         const lineTotal = (unitPrice * item.quantity).toFixed(2);
         calculatedGrandTotal += parseFloat(lineTotal);
 
-        // 3. Construct Payload with Explicit Overrides
-        const payloadItem: any = {
+        console.log(`Item: ${item.name} | Real Price: ${unitPrice} | Sent Price: 0.00`);
+
+        return {
             product_id: item.id,
             quantity: item.quantity,
             variation_id: item.selectedVariation?.id,
-            // FORCE PRICING
-            subtotal: lineTotal,
-            total: lineTotal,
-            subtotal_tax: '0.00',
-            total_tax: '0.00',
-            tax_class: '',
-            meta_data: []
+            // FORCE BACKEND TO SEE ZERO COST FOR ITEMS
+            subtotal: '0.00',
+            total: '0.00',
+            meta_data: [
+                { key: 'Real Unit Price', value: unitPrice.toFixed(2) },
+                { key: '_pricing_logic', value: 'frontend_calculated' }
+            ]
         };
-
-        // Add metadata for admins to see logic
-        if (item.custom_price) {
-            payloadItem.meta_data.push({ key: '_is_bundle_price', value: 'yes' });
-            payloadItem.meta_data.push({ key: 'Calculated Unit Price', value: unitPrice.toFixed(2) });
-        }
-
-        return payloadItem;
     });
 
-    console.log(`🧮 Frontend Calculated Total: ${calculatedGrandTotal.toFixed(2)}`);
+    console.log(`🧮 Correct Grand Total: ${calculatedGrandTotal.toFixed(2)}`);
+
+    // 2. Add the ENTIRE amount as a Fee
+    // This bypasses all product pricing logic in backend
+    const fee_lines = [
+        {
+            name: "Order Total (Products)",
+            total: calculatedGrandTotal.toFixed(2),
+            tax_status: 'none'
+        }
+    ];
 
     const meta_data = [];
     if (orderData.payment_method === 'manual') {
         meta_data.push({ key: 'bkash_trx_id', value: orderData.trxId });
         meta_data.push({ key: 'sender_number', value: orderData.senderNumber });
     }
-
-    // Force total at root level metadata just in case backend has a hook looking for it
-    meta_data.push({ key: '_frontend_total', value: calculatedGrandTotal.toFixed(2) });
 
     const payment_method_id = orderData.payment_method === 'manual' ? 'bacs' : 'uddoktapay';
     const coupon_lines = orderData.coupon_code ? [{ code: orderData.coupon_code }] : [];
@@ -216,6 +212,7 @@ export const api = {
         customer_id: orderData.customer_id || 0,
         billing: orderData.billing,
         line_items,
+        fee_lines, // <--- THIS IS THE KEY FIX
         coupon_lines,
         meta_data,
         trxId: orderData.trxId, 
@@ -223,7 +220,6 @@ export const api = {
         customer_note: orderData.payment_method === 'manual' ? `TrxID: ${orderData.trxId}` : "Headless Order"
     };
 
-    console.table(payload.line_items);
     console.log("🚀 SENDING PAYLOAD:", JSON.stringify(payload, null, 2));
     console.groupEnd();
 
