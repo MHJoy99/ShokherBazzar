@@ -148,11 +148,31 @@ export const api = {
   },
 
   createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string; guest_token?: string }> => {
-    const line_items = orderData.items.map((item: any) => ({
-        product_id: item.id,
-        quantity: item.quantity,
-        variation_id: item.selectedVariation?.id
-    }));
+    // Construct line items with explicit custom price override for Bundles
+    const line_items = orderData.items.map((item: any) => {
+        const lineItem: any = {
+            product_id: item.id,
+            quantity: item.quantity,
+            variation_id: item.selectedVariation?.id
+        };
+
+        // IMPORTANT: If this item comes from the Calculator with a custom price,
+        // we must explicitly tell the backend the 'total' and 'subtotal'.
+        // Otherwise, WooCommerce will recalculate using the database price (which is cheaper).
+        if (item.custom_price) {
+            const lineTotal = (parseFloat(item.custom_price) * item.quantity).toFixed(2);
+            lineItem.subtotal = lineTotal;
+            lineItem.total = lineTotal;
+            
+            // Add metadata so admins know this was a calculator bundle
+            lineItem.meta_data = [
+                { key: '_is_bundle_price', value: 'yes' },
+                { key: 'Unit Price', value: `${parseFloat(item.custom_price).toFixed(2)}` }
+            ];
+        }
+        
+        return lineItem;
+    });
 
     const meta_data = [];
     if (orderData.payment_method === 'manual') {
