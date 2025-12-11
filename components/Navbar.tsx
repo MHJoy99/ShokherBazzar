@@ -109,8 +109,8 @@ export const Navbar: React.FC = () => {
               <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center transform group-hover:rotate-12 transition-transform shadow-glow">
                 <i className="fas fa-gamepad text-black text-2xl"></i>
               </div>
-              <div className="hidden sm:block">
-                  <h1 className="text-xl font-black text-white italic tracking-tighter leading-none">MHJOY<span className="text-primary">GAMERSHUB</span></h1>
+              <div className="block">
+                  <h1 className="text-lg md:text-xl font-black text-white italic tracking-tighter leading-none">MHJOY<span className="text-primary">GAMERSHUB</span></h1>
                   <p className="text-[9px] text-gray-400 uppercase tracking-widest">Digital Store</p>
               </div>
            </Link>
@@ -202,7 +202,7 @@ export const Navbar: React.FC = () => {
               </AnimatePresence>
            </div>
 
-           {/* ACTIONS (Cart, User, Mobile Toggles) */}
+           {/* ACTIONS (Desktop Only for Cart/User, Mobile gets BottomBar) */}
            <div className="flex items-center gap-3 z-50">
               {/* MOBILE SEARCH TOGGLE */}
               <button 
@@ -212,25 +212,29 @@ export const Navbar: React.FC = () => {
                   <i className={`fas ${isMobileSearchOpen ? 'fa-times' : 'fa-search'}`}></i>
               </button>
 
-              <Link to="/cart" className="relative group">
+              {/* Desktop Cart */}
+              <Link to="/cart" className="relative group hidden lg:flex">
                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-primary group-hover:text-black transition-all">
                     <i className="fas fa-shopping-cart text-sm"></i>
                  </div>
                  {itemCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold border-2 border-dark-900 shadow-glow">{itemCount}</span>}
               </Link>
               
-              {user ? (
-                   <Link to="/dashboard" className="hidden sm:flex items-center gap-2 bg-white/5 rounded-full pl-1 pr-3 py-1 hover:bg-white/10 transition-colors border border-white/10">
-                        <img src={user.avatar_url} className="w-8 h-8 rounded-full border border-primary" alt="User" />
-                        <span className="hidden md:block text-xs font-bold text-white uppercase">{user.username}</span>
-                   </Link>
-              ) : (
-                  <Link to="/login" className="hidden sm:flex w-10 h-10 rounded-full bg-white/5 items-center justify-center hover:bg-white/10 transition-colors">
-                      <i className="fas fa-user text-sm"></i>
-                  </Link>
-              )}
+              {/* Desktop User */}
+              <div className="hidden lg:block">
+                {user ? (
+                    <Link to="/dashboard" className="flex items-center gap-2 bg-white/5 rounded-full pl-1 pr-3 py-1 hover:bg-white/10 transition-colors border border-white/10">
+                            <img src={user.avatar_url} className="w-8 h-8 rounded-full border border-primary" alt="User" />
+                            <span className="text-xs font-bold text-white uppercase">{user.username}</span>
+                    </Link>
+                ) : (
+                    <Link to="/login" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
+                        <i className="fas fa-user text-sm"></i>
+                    </Link>
+                )}
+              </div>
 
-              {/* MOBILE MENU TOGGLE */}
+              {/* MOBILE MENU TOGGLE (Hamburger) */}
               <button 
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 className="w-10 h-10 rounded-full bg-white/5 flex lg:hidden items-center justify-center text-white active:scale-95 transition-transform"
@@ -293,7 +297,7 @@ export const Navbar: React.FC = () => {
         </AnimatePresence>
       </nav>
 
-      {/* MOBILE SIDEBAR MENU */}
+      {/* MOBILE SIDEBAR MENU (Simplified for Bottom Nav Compatibility) */}
       <AnimatePresence>
         {isMobileMenuOpen && (
             <motion.div
@@ -305,7 +309,7 @@ export const Navbar: React.FC = () => {
             >
                 {/* MENU HEADER WITH CLOSE BUTTON */}
                 <div className="p-6 flex items-center justify-between border-b border-white/5 bg-dark-900">
-                    <h2 className="text-xl font-black text-white italic tracking-tighter">MENU</h2>
+                    <h2 className="text-xl font-black text-white italic tracking-tighter">BROWSE</h2>
                     <button 
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white active:bg-red-500 active:text-white transition-colors"
@@ -314,25 +318,9 @@ export const Navbar: React.FC = () => {
                     </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6">
+                <div className="flex-1 overflow-y-auto p-6 pb-24">
                     <div className="flex flex-col gap-6">
-                        
-                        {/* User Status in Menu */}
-                        {user ? (
-                            <Link to="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="bg-primary/10 border border-primary/30 p-4 rounded-xl flex items-center gap-4 mb-2">
-                                <img src={user.avatar_url} className="w-12 h-12 rounded-full border border-primary" alt="" />
-                                <div>
-                                    <p className="text-gray-400 text-xs font-bold uppercase">Logged in as</p>
-                                    <p className="text-white font-black uppercase text-lg">{user.username}</p>
-                                </div>
-                            </Link>
-                        ) : (
-                            <div className="grid grid-cols-2 gap-4 mb-2">
-                                <Link to="/login" onClick={() => setIsMobileMenuOpen(false)} className="bg-white/5 border border-white/10 p-3 rounded-xl text-center font-bold text-white uppercase">Login</Link>
-                                <Link to="/login" onClick={() => setIsMobileMenuOpen(false)} className="bg-primary text-black p-3 rounded-xl text-center font-black uppercase">Register</Link>
-                            </div>
-                        )}
-
+                        {/* Categories List */}
                         {navLinks.map((nav) => (
                             <div key={nav.title} className="space-y-4">
                                 <h3 className="text-primary font-black uppercase tracking-widest text-sm border-b border-white/10 pb-2">{nav.title}</h3>

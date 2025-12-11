@@ -45,33 +45,44 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
     const [target, setTarget] = useState<string>('');
     const [selectedCurrency, setSelectedCurrency] = useState('USD');
     const [conversionRates, setConversionRates] = useState<Record<string, number>>({});
+    const [ratesLoaded, setRatesLoaded] = useState(false);
     
     const [result, setResult] = useState<CalcResult | null>(null);
     const [error, setError] = useState('');
     const { addToCart } = useCart();
     const { showToast } = useToast();
 
-    // 0. Init Rates
+    // 0. Init Rates (Prioritize Live, Fallback to Hardcoded)
     useEffect(() => {
-        // Load Fallbacks
+        // 1. Set Fallbacks immediately to prevent UI lag
         const initial: Record<string, number> = {};
         Object.entries(CURRENCY_MAP).forEach(([key, val]) => initial[key] = val.fallback);
         setConversionRates(initial);
 
-        // Try Live Fetch
-        fetch('https://api.frankfurter.app/latest?from=USD')
-            .then(res => res.json())
-            .then(data => {
+        // 2. Attempt Live Fetch
+        const fetchRates = async () => {
+            try {
+                const res = await fetch('https://api.frankfurter.app/latest?from=USD');
+                if (!res.ok) throw new Error("Rate API failed");
+                const data = await res.json();
+                
                 if (data && data.rates) {
                     setConversionRates(prev => ({ ...prev, ...data.rates }));
+                    setRatesLoaded(true);
                 }
-            })
-            .catch(() => { /* Silent fail to fallbacks */ });
+            } catch (e) {
+                console.warn("Currency API offline, using fallback rates.");
+                // Fallback rates already set, so we just do nothing
+            }
+        };
+
+        fetchRates();
     }, []);
 
     // 1. Parse Variations into usable numbers
     const options: CalcOption[] = useMemo(() => {
         return variations.map(v => {
+            // SAFE MATCH: Ensure we don't crash if name has no numbers
             const match = v.name.match(/(\d+(\.\d+)?)/);
             const attrDenom = product.attributes?.find(a => a.name === 'pa_denomination')?.options.find(opt => v.name.includes(opt));
             
@@ -278,10 +289,13 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
 
             {/* LIVE RATE INDICATOR */}
             {selectedCurrency !== 'USD' && conversionRates[selectedCurrency] && (
-                <p className="text-[10px] text-gray-400 font-mono mb-4 text-center sm:text-left bg-black/20 inline-block px-2 py-1 rounded border border-white/5">
-                    <i className="fas fa-exchange-alt mr-1"></i>
-                    1 USD ≈ {conversionRates[selectedCurrency]?.toFixed(2)} {selectedCurrency}
-                </p>
+                <div className="flex items-center gap-2 mb-4">
+                     <p className="text-[10px] text-gray-400 font-mono text-center sm:text-left bg-black/20 inline-block px-2 py-1 rounded border border-white/5">
+                        <i className="fas fa-exchange-alt mr-1"></i>
+                        1 USD ≈ {conversionRates[selectedCurrency]?.toFixed(2)} {selectedCurrency}
+                     </p>
+                     {ratesLoaded && <span className="text-[10px] text-green-500 font-bold animate-pulse">● Live Rates</span>}
+                </div>
             )}
 
             {error && <p className="text-red-400 text-sm font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20"><i className="fas fa-exclamation-circle"></i> {error}</p>}
@@ -690,7 +704,8 @@ export const ProductDetail: React.FC = () => {
         </div>
       </div>
       
-      <div className="fixed bottom-0 left-0 w-full bg-dark-900 border-t border-white/10 p-4 z-50 md:hidden flex items-center justify-between gap-4 shadow-2xl">
+      {/* MOBILE FLOATING CTA (Replaces old sticky footer, hidden on Desktop, respects Bottom Nav) */}
+      <div className="fixed bottom-16 left-0 w-full bg-dark-900 border-t border-white/10 p-4 z-40 md:hidden flex items-center justify-between gap-4 shadow-2xl safe-area-bottom">
           <div><p className="text-[10px] text-gray-500 uppercase font-bold">Total</p><p className="text-xl font-black text-white">৳{totalPrice}</p></div>
           <button 
               onClick={() => { 

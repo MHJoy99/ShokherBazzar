@@ -8,14 +8,18 @@ const WP_BASE_URL = "https://admin.mhjoygamershub.com/wp-json/wp/v2";
 const CUSTOM_API_URL = "https://admin.mhjoygamershub.com/wp-json/custom/v1";
 
 // Keys: Prioritize Environment Variables for Security
+// SECURITY FIX: Removed hardcoded fallbacks. Ensure these are set in your .env file or Vercel/Netlify Dashboard.
 const env = (import.meta as any).env;
-const CONSUMER_KEY = env?.VITE_WC_CONSUMER_KEY || "ck_97520f17fc4470d40b9625ea0cf0911c5a0ce9bb";
-const CONSUMER_SECRET = env?.VITE_WC_CONSUMER_SECRET || "cs_ad555ccecf6ebc4d1c84a3e14d74b53dd55de903";
+const CONSUMER_KEY = env?.VITE_WC_CONSUMER_KEY || ""; 
+const CONSUMER_SECRET = env?.VITE_WC_CONSUMER_SECRET || "";
 
 // Branded Placeholder for missing images
 const PLACEHOLDER_IMG = "https://placehold.co/400x600/0f172a/06b6d4/png?text=MHJoy+GamersHub";
 
 const getAuthHeaders = () => {
+    if (!CONSUMER_KEY || !CONSUMER_SECRET) {
+        console.warn("⚠️ API Keys missing! Check your .env file.");
+    }
     const auth = btoa(`${CONSUMER_KEY}:${CONSUMER_SECRET}`);
     return { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' };
 };
@@ -147,66 +151,70 @@ export const api = {
   },
 
   createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string; guest_token?: string }> => {
-    console.group("📦 ORDER CREATION - STRICT MODE");
+    console.group("📦 ORDER CREATION - BUNDLE SYNC");
     console.log("Input Order Data:", orderData);
 
-    let calculatedGrandTotal = 0;
+    // Track total difference between Standard Price and Custom (Bundle) Price
+    let totalStandardPrice = 0;
+    let totalCustomPrice = 0;
 
-    // 1. Build Line Items
+    // 1. Build Line Items (Standard WooCommerce Logic)
     const line_items = orderData.items.map((item: any) => {
-        // Calculate the REAL price we want to charge
-        let unitPrice = 0;
-        
-        if (item.custom_price) {
-            unitPrice = parseFloat(item.custom_price);
-        } else if (item.selectedVariation) {
-            unitPrice = parseFloat(item.selectedVariation.price);
+        // A. Find what the Standard Price is (what Backend thinks it is)
+        let standardUnitPrice = 0;
+        if (item.selectedVariation) {
+            standardUnitPrice = parseFloat(item.selectedVariation.price);
         } else {
-            unitPrice = item.on_sale && item.sale_price ? parseFloat(item.sale_price) : parseFloat(item.price);
+            standardUnitPrice = item.on_sale && item.sale_price ? parseFloat(item.sale_price) : parseFloat(item.price);
+        }
+        
+        // B. Find what the Custom Price is (what Frontend Calculator said)
+        let customUnitPrice = standardUnitPrice;
+        if (item.custom_price) {
+            customUnitPrice = parseFloat(item.custom_price);
         }
 
-        // Accumulate correct total
-        const lineTotal = (unitPrice * item.quantity).toFixed(2);
-        calculatedGrandTotal += parseFloat(lineTotal);
+        // C. Add to running totals
+        totalStandardPrice += (standardUnitPrice * item.quantity);
+        totalCustomPrice += (customUnitPrice * item.quantity);
 
-        console.log(`Item: ${item.name} | VarID: ${item.selectedVariation?.id} | Sent Price: 0.00 | Real: ${unitPrice}`);
-
-        // STRICT PAYLOAD CONSTRUCTION
-        // Explicitly ensuring variation_id is a number if it exists
+        // D. Construct Payload (No price overrides here, strict standard ID linking)
         const lineItemPayload: any = {
             product_id: item.id,
-            quantity: item.quantity,
-            // FORCE BACKEND TO SEE ZERO COST FOR ITEMS
-            subtotal: '0.00',
-            total: '0.00',
-            meta_data: [
-                { key: 'Real Unit Price', value: unitPrice.toFixed(2) },
-                { key: '_pricing_logic', value: 'frontend_calculated' }
-            ]
+            quantity: item.quantity
         };
 
         if (item.selectedVariation && item.selectedVariation.id) {
             lineItemPayload.variation_id = Number(item.selectedVariation.id);
-            // Redundant check: Add variation info to metadata so admin can see it even if ID linking fails
-            lineItemPayload.meta_data.push({ 
+            // Metadata for Admin Visibility
+            lineItemPayload.meta_data = [{ 
                 key: 'Selected Option', 
                 value: `${item.selectedVariation.name} (ID: ${item.selectedVariation.id})` 
-            });
+            }];
+        }
+
+        // If it's a bundle item, mark it
+        if (item.custom_price) {
+            if(!lineItemPayload.meta_data) lineItemPayload.meta_data = [];
+            lineItemPayload.meta_data.push({ key: 'Bundle Promo', value: 'Active' });
         }
 
         return lineItemPayload;
     });
 
-    console.log(`🧮 Correct Grand Total: ${calculatedGrandTotal.toFixed(2)}`);
-
-    // 2. Add the ENTIRE amount as a Fee
-    const fee_lines = [
-        {
-            name: "Order Total (Products)",
-            total: calculatedGrandTotal.toFixed(2),
+    // 2. Calculate the Discount Needed (Option 1: Negative Fee)
+    // If standard is $20 and custom is $18, we need a fee of -$2.00
+    const discountNeeded = totalStandardPrice - totalCustomPrice;
+    
+    const fee_lines = [];
+    if (discountNeeded > 0.05) { // Threshold to avoid rounding errors like 0.00001
+        console.log(`💰 Applying Bundle Discount: -${discountNeeded.toFixed(2)}`);
+        fee_lines.push({
+            name: "Bundle Savings",
+            total: `-${discountNeeded.toFixed(2)}`,
             tax_status: 'none'
-        }
-    ];
+        });
+    }
 
     const meta_data = [];
     if (orderData.payment_method === 'manual') {
@@ -222,7 +230,7 @@ export const api = {
         customer_id: orderData.customer_id || 0,
         billing: orderData.billing,
         line_items,
-        fee_lines, 
+        fee_lines, // This sends the negative fee
         coupon_lines,
         meta_data,
         trxId: orderData.trxId, 
