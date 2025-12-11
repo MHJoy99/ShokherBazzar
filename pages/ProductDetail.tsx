@@ -372,9 +372,7 @@ export const ProductDetail: React.FC = () => {
 
       const data = await api.getProduct(slug);
       setProduct(data || null);
-      
-      // Removed auto-selection to force user choice
-      // if (data?.variations && data.variations.length > 0) setSelectedVariation(data.variations[0]);
+      if (data?.variations && data.variations.length > 0) setSelectedVariation(data.variations[0]);
       
       setLoadingMain(false);
 
@@ -425,11 +423,6 @@ export const ProductDetail: React.FC = () => {
   if (isVariable && selectedVariation) {
       displayPrice = selectedVariation.price;
       regularPrice = selectedVariation.regular_price || (parseFloat(selectedVariation.price) * 1.1).toFixed(0); 
-  } else if (isVariable && !selectedVariation) {
-      // Show base price or 'From'
-      const minPrice = product.variations ? Math.min(...product.variations.map(v => parseFloat(v.price))) : 0;
-      displayPrice = minPrice > 0 ? minPrice.toString() : product.price;
-      regularPrice = (parseFloat(displayPrice) * 1.1).toFixed(0);
   } else {
       displayPrice = product.on_sale && product.sale_price ? product.sale_price : product.price;
       regularPrice = product.regular_price;
@@ -587,7 +580,7 @@ export const ProductDetail: React.FC = () => {
                         <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-3">
                             <span className="text-gray-400 text-xs font-bold uppercase">Item</span>
                             <span className="text-white text-xs font-bold text-right truncate max-w-[150px]">
-                                {isVariable && selectedVariation ? selectedVariation.name : (isVariable ? 'Select a Package' : product.name)}
+                                {isVariable && selectedVariation ? selectedVariation.name : product.name}
                             </span>
                         </div>
                         <div className="flex items-center justify-between">
@@ -602,9 +595,10 @@ export const ProductDetail: React.FC = () => {
                     <div className="flex justify-between items-end mb-8 border-b border-white/5 pb-6">
                         <span className="text-gray-400 text-sm font-bold uppercase">Total Price</span>
                         <div className="text-right">
-                             <div className="text-4xl font-black text-primary tracking-tight">
-                                {isVariable && !selectedVariation ? <span className="text-2xl">From ৳{displayPrice}</span> : `৳${totalPrice}`}
-                             </div>
+                             {parseFloat(regularPrice) > parseFloat(displayPrice) && (
+                                 <div className="text-xs text-gray-500 line-through mb-1">৳{(parseFloat(regularPrice) * qty).toFixed(0)}</div>
+                             )}
+                             <div className="text-4xl font-black text-primary tracking-tight">৳{totalPrice}</div>
                              <div className="text-[10px] text-gray-500 font-mono mt-1">Credits Earned: {(parseFloat(totalPrice) * 0.01).toFixed(0)}</div>
                         </div>
                     </div>

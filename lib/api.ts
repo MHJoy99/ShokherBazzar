@@ -5,6 +5,7 @@ import { config } from '../config';
 // UPDATED BACKEND DOMAINS
 const WC_BASE_URL = "https://admin.mhjoygamershub.com/wp-json/wc/v3";
 const WP_BASE_URL = "https://admin.mhjoygamershub.com/wp-json/wp/v2";
+const CUSTOM_API_URL = "https://admin.mhjoygamershub.com/wp-json/custom/v1";
 
 // Keys: Prioritize Environment Variables for Security
 const env = (import.meta as any).env;
@@ -71,47 +72,6 @@ const mapWooProduct = (p: any): Product => ({
   variations: [],
   featured: p.featured || false
 });
-
-// FRONTEND SCRAPER: Attempts to find the real Gateway URL from the WordPress Page
-const attemptPaymentPageScrape = async (wpPaymentUrl: string): Promise<string> => {
-    try {
-        console.log("Attempting to bypass WP page by scraping:", wpPaymentUrl);
-        // We fetch the WP page (frontend only!)
-        const response = await fetch(wpPaymentUrl);
-        const html = await response.text();
-
-        // 1. Look for UddoktaPay specific redirect
-        // Many plugins inject: window.location.href = "https://sandbox.uddoktapay.com/..."
-        const jsRedirectMatch = html.match(/window\.location\.href\s*=\s*['"](https:\/\/.*?uddoktapay\.com.*?)['"]/);
-        if (jsRedirectMatch && jsRedirectMatch[1]) {
-            console.log("Found JS Redirect:", jsRedirectMatch[1]);
-            return jsRedirectMatch[1];
-        }
-
-        // 2. Look for Form Action in the "Pay Now" button
-        // <form ... action="https://sandbox.uddoktapay.com/checkout/..." ...>
-        const formActionMatch = html.match(/action=['"](https:\/\/.*?uddoktapay\.com.*?)['"]/);
-        if (formActionMatch && formActionMatch[1]) {
-             console.log("Found Form Action:", formActionMatch[1]);
-             return formActionMatch[1];
-        }
-
-        // 3. Look for generic 'Pay for order' link if it's an anchor tag
-        const anchorMatch = html.match(/href=['"](https:\/\/.*?uddoktapay\.com.*?)['"]/);
-        if (anchorMatch && anchorMatch[1]) {
-            return anchorMatch[1];
-        }
-        
-        console.log("No direct link found, returning WP link.");
-        return wpPaymentUrl;
-    } catch (e) {
-        console.warn("CORS/Network blocked scraping. Falling back to WP page.", e);
-        // If CORS blocks us (very likely on different domains), we MUST return the original link
-        // so the user can at least pay, even if they see the WP page for a second.
-        return wpPaymentUrl;
-    }
-};
-
 
 export const api = {
   getProducts: async (idOrSlug?: string): Promise<Product[]> => {
@@ -187,142 +147,305 @@ export const api = {
   },
 
   createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string; guest_token?: string }> => {
-    console.group("📦 ORDER CREATION - STANDARD API");
+    console.group("📦 ORDER CREATION - STRICT MODE");
     console.log("Input Order Data:", orderData);
 
-    try {
-        const payload = {
-            payment_method: orderData.payment_method,
-            payment_method_title: orderData.payment_method === 'uddoktapay' ? 'bKash/Nagad (UddoktaPay)' : 'Manual',
-            set_paid: false,
-            billing: orderData.billing,
-            line_items: orderData.items.map((i: any) => {
-                const lineItem: any = {
-                    product_id: i.id,
-                    quantity: i.quantity
-                };
-                // CRITICAL FIX: Ensure variation_id is passed if it exists
-                // This ensures the correct denomination is selected in WooCommerce
-                if (i.selectedVariation && i.selectedVariation.id) {
-                    lineItem.variation_id = i.selectedVariation.id;
-                }
-                return lineItem;
-            }),
-            customer_id: orderData.customer_id || 0,
-            coupon_lines: orderData.coupon_code ? [{ code: orderData.coupon_code }] : [],
+    let calculatedGrandTotal = 0;
+
+    // 1. Build Line Items
+    const line_items = orderData.items.map((item: any) => {
+        // Calculate the REAL price we want to charge
+        let unitPrice = 0;
+        
+        if (item.custom_price) {
+            unitPrice = parseFloat(item.custom_price);
+        } else if (item.selectedVariation) {
+            unitPrice = parseFloat(item.selectedVariation.price);
+        } else {
+            unitPrice = item.on_sale && item.sale_price ? parseFloat(item.sale_price) : parseFloat(item.price);
+        }
+
+        // Accumulate correct total
+        const lineTotal = (unitPrice * item.quantity).toFixed(2);
+        calculatedGrandTotal += parseFloat(lineTotal);
+
+        console.log(`Item: ${item.name} | VarID: ${item.selectedVariation?.id} | Sent Price: 0.00 | Real: ${unitPrice}`);
+
+        // STRICT PAYLOAD CONSTRUCTION
+        // Explicitly ensuring variation_id is a number if it exists
+        const lineItemPayload: any = {
+            product_id: item.id,
+            quantity: item.quantity,
+            // FORCE BACKEND TO SEE ZERO COST FOR ITEMS
+            subtotal: '0.00',
+            total: '0.00',
             meta_data: [
-                 { key: 'billing_phone', value: orderData.billing.phone },
-                 { key: 'sender_number', value: orderData.senderNumber },
-                 { key: 'transaction_id', value: orderData.trxId }
+                { key: 'Real Unit Price', value: unitPrice.toFixed(2) },
+                { key: '_pricing_logic', value: 'frontend_calculated' }
             ]
         };
 
-        console.log("Sending Payload to WC:", payload);
-
-        const data = await fetchWooCommerce('/orders', 'POST', payload);
-        console.log("WC Response:", data);
-        
-        let finalUrl = data.payment_url;
-        
-        // ATTEMPT BYPASS IF UDDOKTAPAY
-        if (orderData.payment_method === 'uddoktapay' && finalUrl) {
-              const directGatewayUrl = await attemptPaymentPageScrape(finalUrl);
-              finalUrl = directGatewayUrl;
+        if (item.selectedVariation && item.selectedVariation.id) {
+            lineItemPayload.variation_id = Number(item.selectedVariation.id);
+            // Redundant check: Add variation info to metadata so admin can see it even if ID linking fails
+            lineItemPayload.meta_data.push({ 
+                key: 'Selected Option', 
+                value: `${item.selectedVariation.name} (ID: ${item.selectedVariation.id})` 
+            });
         }
 
-        return { 
-            success: true, 
-            id: data.id, 
-            payment_url: finalUrl, 
-            guest_token: data.order_key 
-        }; 
+        return lineItemPayload;
+    });
 
+    console.log(`🧮 Correct Grand Total: ${calculatedGrandTotal.toFixed(2)}`);
+
+    // 2. Add the ENTIRE amount as a Fee
+    const fee_lines = [
+        {
+            name: "Order Total (Products)",
+            total: calculatedGrandTotal.toFixed(2),
+            tax_status: 'none'
+        }
+    ];
+
+    const meta_data = [];
+    if (orderData.payment_method === 'manual') {
+        meta_data.push({ key: 'bkash_trx_id', value: orderData.trxId });
+        meta_data.push({ key: 'sender_number', value: orderData.senderNumber });
+    }
+
+    const payment_method_id = orderData.payment_method === 'manual' ? 'bacs' : 'uddoktapay';
+    const coupon_lines = orderData.coupon_code ? [{ code: orderData.coupon_code }] : [];
+
+    const payload = {
+        payment_method: payment_method_id,
+        customer_id: orderData.customer_id || 0,
+        billing: orderData.billing,
+        line_items,
+        fee_lines, 
+        coupon_lines,
+        meta_data,
+        trxId: orderData.trxId, 
+        senderNumber: orderData.senderNumber, 
+        customer_note: orderData.payment_method === 'manual' ? `TrxID: ${orderData.trxId}` : "Headless Order"
+    };
+
+    console.log("🚀 SENDING PAYLOAD:", JSON.stringify(payload, null, 2));
+    console.groupEnd();
+
+    try {
+        const response = await fetch(`${CUSTOM_API_URL}/create-order`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            console.log("✅ ORDER SUCCESS:", data);
+            
+            const baseResult = {
+                id: data.id,
+                success: true,
+                guest_token: data.guest_token
+            };
+
+            if (data.payment_url) {
+                return { ...baseResult, payment_url: data.payment_url };
+            }
+            
+            if (orderData.payment_method !== 'manual' && data.order_key) {
+                const wpPayLink = `https://admin.mhjoygamershub.com/checkout/order-pay/${data.id}/?pay_for_order=true&key=${data.order_key}`;
+                return { ...baseResult, payment_url: wpPayLink };
+            }
+
+            return baseResult;
+        } else {
+            const err = await response.json();
+            console.error("❌ ORDER FAILED:", err);
+            throw new Error(err.message || 'Order creation failed');
+        }
     } catch (proxyError: any) {
         console.error("❌ NETWORK ERROR:", proxyError);
         throw proxyError;
-    } finally {
-        console.groupEnd();
     }
   },
 
   verifyPayment: async (orderId: number, invoiceId?: string): Promise<boolean> => {
-      // Backend verification is usually automatic via Webhooks.
-      // Frontend just assumes success if redirected back with success param.
-      return true;
+      await new Promise(r => setTimeout(r, 1500));
+      
+      try {
+          const res = await fetch(`${CUSTOM_API_URL}/verify-payment`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ order_id: orderId, invoice_id: invoiceId })
+          });
+          
+          if (res.status === 404) return false;
+          const data = await res.json();
+          if (data.status !== 'verified' && data.status !== 'already_paid') {
+               await api.sendMessage({
+                   name: "System Alert",
+                   email: "admin@mhjoygamershub.com",
+                   message: `Urgent: Order #${orderId} (Invoice ${invoiceId}) returned SUCCESS but API verification failed. Please check UddoktaPay manually.`
+               });
+          }
+          return res.ok;
+      } catch (e) {
+          return false;
+      }
   },
 
   sendMessage: async (formData: any): Promise<boolean> => {
-       // Placeholder
-       return true;
+      try {
+          const response = await fetch(`${CUSTOM_API_URL}/contact`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(formData)
+          });
+          return response.ok;
+      } catch (error) { throw error; }
   },
 
   register: async (userData: any): Promise<User> => {
-       throw new Error("Registration requires custom backend support.");
+      try {
+          const response = await fetch(`${CUSTOM_API_URL}/register-customer`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(userData)
+          });
+          if (response.ok) {
+              const u = await response.json();
+              u.avatar_url = getBrandedAvatar(u.username);
+              return u;
+          }
+          throw new Error("Registration failed");
+      } catch (e) { throw e; }
   },
 
   login: async (email: string, password?: string): Promise<User> => {
-      throw new Error("Login requires JWT Auth plugin configuration.");
+      try {
+          const response = await fetch(`${CUSTOM_API_URL}/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password })
+          });
+          if (!response.ok) throw new Error("Invalid credentials");
+          const u = await response.json();
+          u.avatar_url = getBrandedAvatar(u.username);
+          return u;
+      } catch (error) { throw error; }
   },
 
   resetPassword: async (email: string): Promise<boolean> => {
-       return true;
+      try {
+          const response = await fetch(`${CUSTOM_API_URL}/reset-password`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email })
+          });
+          if (!response.ok) throw new Error("Failed to reset");
+          return true;
+      } catch (e) { throw e; }
   },
 
   updateProfile: async (userId: number, data: any): Promise<boolean> => {
-       return false;
+      try {
+          const response = await fetch(`${CUSTOM_API_URL}/update-profile`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: userId, ...data })
+          });
+          return response.ok;
+      } catch (e) { return false; }
   },
 
   getProfileSync: async (email: string): Promise<User | null> => {
-      return null;
+      try {
+          const response = await fetch(`${CUSTOM_API_URL}/get-profile`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email })
+          });
+          if (!response.ok) return null;
+          const u = await response.json();
+          u.avatar_url = getBrandedAvatar(u.username);
+          return u;
+      } catch (e) { return null; }
   },
-  
+
   getProfile: async (email: string): Promise<User | null> => {
-      return null;
+     return api.getProfileSync(email);
   },
 
   getUserOrders: async (userId: number): Promise<Order[]> => {
       try {
-          const data = await fetchWooCommerce(`/orders?customer=${userId}&per_page=20`);
-          return data.map((o: any) => ({
+          const response = await fetch(`${CUSTOM_API_URL}/my-orders`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user_id: userId })
+          });
+          
+          if (!response.ok) throw new Error("Failed to fetch orders");
+          
+          const orders = await response.json();
+
+          return orders.map((o: any) => ({
               id: o.id,
               status: o.status,
               total: o.total,
-              currency_symbol: o.currency_symbol,
-              date_created: new Date(o.date_created).toLocaleDateString(),
-              customer_note: o.customer_note,
-              line_items: o.line_items.map((i: any) => ({
+              currency_symbol: '৳',
+              date_created: o.date_created,
+              customer_note: o.customer_note || "",
+              line_items: o.items.map((i: any) => ({
                   name: i.name,
                   quantity: i.quantity,
-                  license_key: i.meta_data?.find((m: any) => m.key === '_license_key' || m.key === 'serial_number')?.value,
-                  image: i.image?.src || PLACEHOLDER_IMG,
-                  downloads: i.downloads
+                  license_key: i.license_keys && i.license_keys.length > 0 ? i.license_keys.join(' | ') : null,
+                  image: i.image || PLACEHOLDER_IMG, // Use fallback
+                  downloads: [],
               }))
           }));
-      } catch { return []; }
+      } catch (error) { 
+          console.error("Order Fetch Error:", error);
+          return []; 
+      }
   },
 
   trackOrder: async (orderId: string, email: string, token?: string): Promise<{ type: 'success' | 'email_sent' | 'error', data?: Order }> => {
       try {
-          const orderData = await fetchWooCommerce(`/orders/${orderId}`);
-          if (orderData && orderData.billing && orderData.billing.email.toLowerCase() === email.toLowerCase()) {
-              return { type: 'success', data: {
-                  id: orderData.id,
-                  status: orderData.status,
-                  total: orderData.total,
-                  currency_symbol: orderData.currency_symbol,
-                  date_created: new Date(orderData.date_created).toLocaleDateString(),
-                  customer_note: orderData.customer_note,
-                  line_items: orderData.line_items.map((i: any) => ({
-                    name: i.name,
-                    quantity: i.quantity,
-                    license_key: i.meta_data?.find((m: any) => m.key === '_license_key' || m.key === 'serial_number')?.value,
-                    image: i.image?.src || PLACEHOLDER_IMG,
-                    downloads: i.downloads
-                  }))
-              }};
+          const response = await fetch(`${CUSTOM_API_URL}/track-order`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ order_id: orderId, email: email, token: token })
+          });
+
+          const data = await response.json();
+
+          if (data.status === 'email_sent') {
+              return { type: 'email_sent' };
           }
+
+          if (!response.ok) return { type: 'error' };
+
+          const order: Order = {
+              id: data.id,
+              status: data.status,
+              total: data.total,
+              currency_symbol: '৳',
+              date_created: data.date_created,
+              customer_note: "",
+              line_items: data.items.map((i: any) => ({
+                  name: i.name,
+                  quantity: i.quantity,
+                  license_key: i.license_keys && i.license_keys.length > 0 ? i.license_keys.join(' | ') : null,
+                  image: i.image || PLACEHOLDER_IMG, // Use fallback
+                  downloads: [],
+              }))
+          };
+          return { type: 'success', data: order };
+      } catch (e) {
           return { type: 'error' };
-      } catch(e) { return { type: 'error' }; }
+      }
   },
 
   getOrderNotes: async (orderId: number): Promise<OrderNote[]> => {
