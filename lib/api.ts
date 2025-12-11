@@ -212,12 +212,17 @@ export const api = {
               phone: data.billing.phone,
           },
           line_items: data.items.map((item: any) => ({
-              product_id: item.id, // item.id is variation id if variation selected (logic in Cart.tsx)
+              product_id: item.id, 
               quantity: item.quantity,
-              // If it's a variation, WC usually handles it via product_id if it points to variation ID, 
-              // but sometimes needs variation_id explicitly. 
-              // Assuming Cart.tsx passes the correct ID to map here.
-              variation_id: item.selectedVariation ? item.id : undefined // Logic in Cart.tsx replaces id with variation.id, need to be careful.
+              // If it's a variation, pass variation_id. 
+              // Note: Cart.tsx handles passing the correct ID in 'item.id' if it's a variation selected,
+              // but we should ensure we don't double map. 
+              // Standard WC: product_id = parent, variation_id = variation.
+              // BUT for simplicity in this frontend, Cart.tsx swaps ID. 
+              // We'll keep it simple: if item.id is the variation ID, WC usually accepts it as product_id for order creation 
+              // OR we might need to handle it. 
+              // However, the user issue was specifically about payment URL.
+              variation_id: item.selectedVariation ? item.id : undefined 
           })),
           customer_id: data.customer_id || 0,
           meta_data: [],
@@ -229,7 +234,17 @@ export const api = {
 
       try {
           const order = await fetchWooCommerce('/orders', 'POST', payload);
-          return { success: true, id: order.id, guest_token: order.order_key }; 
+          
+          let paymentUrl = undefined;
+          
+          // FIX: If using UddoktaPay (or any online gateway), we need a payment URL.
+          // Standard WC API /orders endpoint does NOT return a payment link.
+          // We must construct the "Pay for Order" URL which will redirect to the Gateway.
+          if (data.payment_method === 'uddoktapay') {
+              paymentUrl = `https://admin.mhjoygamershub.com/checkout/order-pay/${order.id}/?pay_for_order=true&key=${order.order_key}`;
+          }
+
+          return { success: true, id: order.id, guest_token: order.order_key, payment_url: paymentUrl }; 
       } catch (e) {
           throw e;
       }
