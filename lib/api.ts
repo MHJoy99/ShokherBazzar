@@ -215,13 +215,6 @@ export const api = {
               product_id: item.id, 
               quantity: item.quantity,
               // If it's a variation, pass variation_id. 
-              // Note: Cart.tsx handles passing the correct ID in 'item.id' if it's a variation selected,
-              // but we should ensure we don't double map. 
-              // Standard WC: product_id = parent, variation_id = variation.
-              // BUT for simplicity in this frontend, Cart.tsx swaps ID. 
-              // We'll keep it simple: if item.id is the variation ID, WC usually accepts it as product_id for order creation 
-              // OR we might need to handle it. 
-              // However, the user issue was specifically about payment URL.
               variation_id: item.selectedVariation ? item.id : undefined 
           })),
           customer_id: data.customer_id || 0,
@@ -235,12 +228,16 @@ export const api = {
       try {
           const order = await fetchWooCommerce('/orders', 'POST', payload);
           
-          let paymentUrl = undefined;
+          let paymentUrl = order.payment_url; 
           
-          // FIX: If using UddoktaPay (or any online gateway), we need a payment URL.
-          // Standard WC API /orders endpoint does NOT return a payment link.
-          // We must construct the "Pay for Order" URL which will redirect to the Gateway.
-          if (data.payment_method === 'uddoktapay') {
+          // CHECK FOR CUSTOM GATEWAY LINK IN META DATA (Common in WP plugins)
+          if (!paymentUrl && order.meta_data) {
+             const metaLink = order.meta_data.find((m: any) => m.key === 'uddoktapay_payment_url' || m.key === 'payment_link');
+             if (metaLink) paymentUrl = metaLink.value;
+          }
+
+          // FALLBACK: Only if we have NO url and method is online, use manual order-pay link
+          if (!paymentUrl && data.payment_method === 'uddoktapay') {
               paymentUrl = `https://admin.mhjoygamershub.com/checkout/order-pay/${order.id}/?pay_for_order=true&key=${order.order_key}`;
           }
 
