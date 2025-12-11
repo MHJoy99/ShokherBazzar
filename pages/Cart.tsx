@@ -122,17 +122,8 @@ export const Cart: React.FC = () => {
              }
         }
 
-        // FIX: Map items to ensure Variation ID is sent as Product ID for variable products.
-        // This forces the backend to recognize the exact variant selected.
-        const orderItems = items.map(item => {
-             if (item.selectedVariation) {
-                 return { ...item, id: item.selectedVariation.id };
-             }
-             return item;
-        });
-
         const result = await api.createOrder({ 
-            items: orderItems, 
+            items, 
             billing: formData, 
             payment_method: isFreeOrder ? 'manual' : paymentMethod, 
             trxId: paymentMethod === 'manual' ? trxId : undefined, 

@@ -583,13 +583,6 @@ export const ProductDetail: React.FC = () => {
                                 {isVariable && selectedVariation ? selectedVariation.name : product.name}
                             </span>
                         </div>
-                        {/* DEBUG: Variation ID Display */}
-                        {isVariable && selectedVariation && (
-                            <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-3">
-                                <span className="text-gray-500 text-[10px] font-bold uppercase">Option ID</span>
-                                <span className="text-gray-400 text-[10px] font-mono">{selectedVariation.id}</span>
-                            </div>
-                        )}
                         <div className="flex items-center justify-between">
                             <span className="text-gray-400 text-xs font-bold uppercase">Quantity</span>
                             <div className="flex items-center gap-3">
