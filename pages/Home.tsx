@@ -96,8 +96,13 @@ export const Home: React.FC = () => {
             
             {/* PLATFORM GRID USING CONFIG */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                {config.platformCategories.map((cat, idx) => (
-                    <Link key={idx} to={`/category/${cat.slug}`} className="group relative h-36 rounded-2xl overflow-hidden border border-white/10 hover:border-primary/50 transition-all shadow-lg hover:shadow-glow-sm">
+                {config.platformCategories.map((cat: any, idx) => (
+                    <Link 
+                        key={idx} 
+                        // Updated Logic: Uses customLink if available, else standard category slug
+                        to={cat.customLink ? cat.customLink : `/category/${cat.slug}`} 
+                        className="group relative h-36 rounded-2xl overflow-hidden border border-white/10 hover:border-primary/50 transition-all shadow-lg hover:shadow-glow-sm"
+                    >
                         <div className={`absolute inset-0 bg-gradient-to-br ${cat.color} opacity-40 group-hover:opacity-80 transition-opacity`}></div>
                         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
                         <div className="relative z-10 h-full flex flex-col items-center justify-center gap-3">
@@ -254,4 +259,3 @@ export const Home: React.FC = () => {
     </div>
   );
 };
-    

@@ -28,9 +28,25 @@ export const config = {
         // If false, it uses mock data.
         useRealApi: true 
     },
-    // EDIT YOUR HOME PAGE PLATFORM BUTTONS HERE
+
+    // -------------------------------------------------------------------------
+    // HOMEPAGE PLATFORM BUTTONS CONFIGURATION
+    // -------------------------------------------------------------------------
+    // To link a button to a specific product:
+    // Add a 'customLink' property like this: customLink: "/product/your-product-slug"
+    //
+    // To link to a category page:
+    // Just ensure 'slug' matches the category slug (e.g. slug: "xbox" -> /category/xbox)
+    // -------------------------------------------------------------------------
     platformCategories: [
-      { name: "Steam", icon: "fab fa-steam", color: "from-blue-600 to-blue-900", slug: "steam" },
+      { 
+        name: "Steam", 
+        icon: "fab fa-steam", 
+        color: "from-blue-600 to-blue-900", 
+        slug: "steam",
+        // UPDATED LINK HERE:
+        customLink: "/product/steam-wallet-code-global-usd" 
+      },
       { name: "PlayStation", icon: "fab fa-playstation", color: "from-indigo-600 to-indigo-900", slug: "playstation" },
       { name: "Xbox", icon: "fab fa-xbox", color: "from-green-600 to-green-900", slug: "xbox" },
       { name: "Google Play", icon: "fab fa-google-play", color: "from-rose-600 to-rose-900", slug: "google-play" },

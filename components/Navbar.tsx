@@ -60,12 +60,22 @@ export const Navbar: React.FC = () => {
       return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // ----------------------------------------------------------------------------------
+  // ⚡ EDIT NAVIGATION LINKS HERE
+  // ----------------------------------------------------------------------------------
+  // Structure:
+  // title: Main Menu Name (e.g. Gift Cards)
+  // slug:  Main Category Slug (e.g. gift-cards) -> /category/gift-cards
+  // sub:   Dropdown items. 
+  //        name: Item Name
+  //        link: WHERE IT GOES (e.g. /product/steam-wallet... OR /category/xbox)
+  // ----------------------------------------------------------------------------------
   const navLinks = [
       { 
           title: "Gift Cards", 
           slug: "gift-cards",
           sub: [
-              { name: "Steam Wallet", icon: "fab fa-steam", link: "/category/steam" },
+              { name: "Steam Wallet", icon: "fab fa-steam", link: "/product/steam-wallet-code-global-usd" },
               { name: "Google Play", icon: "fab fa-google-play", link: "/category/google-play" },
               { name: "Xbox Live", icon: "fab fa-xbox", link: "/category/xbox" },
               { name: "PlayStation", icon: "fab fa-playstation", link: "/category/psn" },
