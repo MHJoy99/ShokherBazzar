@@ -134,6 +134,8 @@ export const api = {
   createOrder: async (orderData: any) => {
       // 1. Try Custom API Endpoint first. 
       // This is crucial for Payment Gateways like UddoktaPay to return their own URL instead of WP fallback.
+      // NOTE: The backend (WordPress) calls the UddoktaPay API (checkout-v2) securely using the API Key.
+      // The frontend simply initiates this process via the custom backend endpoint.
       try {
           const response = await fetch(`${CUSTOM_API_URL}/checkout`, {
               method: 'POST',
@@ -173,6 +175,7 @@ export const api = {
 
   verifyPayment: async (orderId: number, invoiceId?: string) => {
       try {
+           // Calls custom backend which calls UddoktaPay's verify-payment API
            await fetch(`${CUSTOM_API_URL}/payment/verify`, {
                method: 'POST',
                headers: getAuthHeaders(),

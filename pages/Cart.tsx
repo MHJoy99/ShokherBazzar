@@ -45,6 +45,10 @@ export const Cart: React.FC = () => {
       const invoice = searchParams.get('invoice_id'); 
       const token = searchParams.get('token'); // Get Token from URL
       
+      if (status === 'cancel') {
+          showToast("Payment was cancelled", "error");
+      }
+
       if ((status === 'success' || status === 'completed') && (oid || invoice)) {
           const finalId = oid ? parseInt(oid) : (invoice ? parseInt(invoice) : 0);
           setOrderId(finalId);
@@ -58,7 +62,7 @@ export const Cart: React.FC = () => {
               api.verifyPayment(finalId, invoice || undefined);
           }
       }
-  }, [searchParams, clearCart]);
+  }, [searchParams, clearCart, showToast]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -122,6 +126,10 @@ export const Cart: React.FC = () => {
              }
         }
 
+        // Generate Dynamic Return URLs
+        const successUrl = `${window.location.origin}/cart?status=success`;
+        const cancelUrl = `${window.location.origin}/cart?status=cancel`;
+
         const result = await api.createOrder({ 
             items, 
             billing: formData, 
@@ -129,7 +137,9 @@ export const Cart: React.FC = () => {
             trxId: paymentMethod === 'manual' ? trxId : undefined, 
             senderNumber: paymentMethod === 'manual' ? senderNumber : undefined,
             customer_id: customerId,
-            coupon_code: appliedCoupon?.code
+            coupon_code: appliedCoupon?.code,
+            success_url: successUrl,
+            cancel_url: cancelUrl
         });
 
         if (result.success) {
