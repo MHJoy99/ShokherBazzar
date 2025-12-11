@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
@@ -86,16 +87,28 @@ export const Footer: React.FC = () => {
                  </h4>
                  <p className="text-xs text-gray-500 mb-4 font-bengali">আমরা ১০০% নিরাপদ পেমেন্ট গ্রহণ করি। <span className="font-sans text-[10px] block mt-0.5">We accept 100% secure payments.</span></p>
                  
-                 {/* Updated Logos: Using highly reliable Wikimedia/Official SVGs */}
-                 <div className="bg-dark-900 p-4 rounded-xl border border-white/5 mb-6 flex flex-wrap gap-2 items-center">
-                      <div className="bg-white rounded p-1 h-8 w-12 flex items-center justify-center overflow-hidden" title="bKash">
-                          <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Bkash_logo_2022.svg/200px-Bkash_logo_2022.svg.png" className="h-full object-contain" alt="bKash" />
+                 {/* Updated Logos: Mixed Image & Icons for Sleek Look */}
+                 <div className="flex flex-wrap gap-3 mb-6 items-center">
+                      {/* Local Methods (Images with transparent BG) */}
+                      <div className="h-9 w-14 bg-white/5 border border-white/10 rounded flex items-center justify-center p-1 hover:bg-white/10 transition-colors" title="bKash">
+                          <img src="https://freepnglogo.com/images/all_img/1701503524bkash-logo-transparent.png" alt="bKash" className="h-full object-contain" />
                       </div>
-                      <div className="bg-white rounded p-1 h-8 w-12 flex items-center justify-center overflow-hidden" title="Visa">
-                          <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Visa_Inc._logo.svg/2560px-Visa_Inc._logo.svg.png" className="h-full object-contain" alt="Visa" />
+                      <div className="h-9 w-14 bg-white/5 border border-white/10 rounded flex items-center justify-center p-1 hover:bg-white/10 transition-colors" title="Nagad">
+                          <img src="https://freepnglogo.com/images/all_img/1701511252nagad-logo-transparent.png" alt="Nagad" className="h-full object-contain" />
                       </div>
-                      <div className="bg-white rounded p-1 h-8 w-12 flex items-center justify-center overflow-hidden" title="Mastercard">
-                          <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png" className="h-full object-contain" alt="Mastercard" />
+                      <div className="h-9 w-14 bg-white/5 border border-white/10 rounded flex items-center justify-center p-1 hover:bg-white/10 transition-colors" title="Rocket">
+                          <img src="https://seeklogo.com/images/D/dutch-bangla-rocket-logo-B4D1CC458D-seeklogo.com.png" alt="Rocket" className="h-full object-contain" />
+                      </div>
+                      
+                      {/* Global Cards (FontAwesome for perfect Dark Mode integration) */}
+                      <div className="h-9 w-14 bg-blue-600/10 border border-blue-500/20 rounded flex items-center justify-center text-blue-400 text-2xl hover:bg-blue-600/20 transition-colors" title="Visa">
+                          <i className="fab fa-cc-visa"></i>
+                      </div>
+                      <div className="h-9 w-14 bg-red-600/10 border border-red-500/20 rounded flex items-center justify-center text-red-400 text-2xl hover:bg-red-600/20 transition-colors" title="Mastercard">
+                          <i className="fab fa-cc-mastercard"></i>
+                      </div>
+                      <div className="h-9 w-14 bg-cyan-600/10 border border-cyan-500/20 rounded flex items-center justify-center text-cyan-400 text-2xl hover:bg-cyan-600/20 transition-colors" title="Amex">
+                          <i className="fab fa-cc-amex"></i>
                       </div>
                  </div>
                  

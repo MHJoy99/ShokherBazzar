@@ -1,15 +1,217 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../lib/api'; 
 import { Product, Variation } from '../types'; 
-import { ProductCard } from '../components/ProductCard';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { config } from '../config';
 import { SkeletonCard } from '../components/Skeleton';
+import { ProductCard } from '../components/ProductCard';
+
+// --- GIFT CARD CALCULATOR LOGIC ---
+interface CalcOption {
+    denom: number;
+    price: number;
+    variation: Variation;
+}
+
+interface CalcResult {
+    type: 'single' | 'pair' | 'triple' | 'quad';
+    items: CalcOption[];
+    totalDenom: number;
+    totalPrice: number;
+    bundlePrice: number;
+    savings: number;
+}
+
+const GiftCardCalculator: React.FC<{ variations: Variation[] }> = ({ variations }) => {
+    const [target, setTarget] = useState<string>('');
+    const [result, setResult] = useState<CalcResult | null>(null);
+    const [error, setError] = useState('');
+    const { addToCart } = useCart();
+    const { showToast } = useToast();
+
+    // 1. Parse Variations into usable numbers
+    const options: CalcOption[] = useMemo(() => {
+        return variations.map(v => {
+            // Extract number from name (e.g. "10 USD") or attributes
+            const match = v.name.match(/(\d+(\.\d+)?)/);
+            const denom = match ? parseFloat(match[0]) : 0;
+            const price = parseFloat(v.price);
+            return (denom > 0 && price > 0) ? { denom, price, variation: v } : null;
+        }).filter(Boolean) as CalcOption[];
+    }, [variations]);
+
+    // 2. Extract Exchange Rate (Reverse engineered from first card)
+    const rate = useMemo(() => {
+        if(options.length === 0) return 0;
+        const card = options[0];
+        // Formula: Price = (Denom * Rate) + FlatProfit
+        // FlatProfit is likely 40 or 80. We approximate Rate.
+        // This is an estimation for display. The exact math is handled in logic below.
+        const flatProfit = card.denom < 3 ? 40 : 80;
+        return (card.price - flatProfit) / card.denom;
+    }, [options]);
+
+    const handleCalculate = () => {
+        const val = parseFloat(target);
+        if (!val || val <= 0) {
+            setError("Please enter a valid amount (e.g. 10.50)");
+            setResult(null);
+            return;
+        }
+        setError('');
+
+        // Helper to find best combo
+        const findCombo = () => {
+             let best: { items: CalcOption[], diff: number } | null = null;
+             
+             // Check Single
+             options.forEach(a => {
+                 const diff = Math.abs(a.denom - val);
+                 if(!best || diff < best.diff) best = { items: [a], diff };
+             });
+
+             // Check Pair
+             for(let i=0; i<options.length; i++) {
+                 for(let j=i; j<options.length; j++) {
+                     const sum = options[i].denom + options[j].denom;
+                     const diff = Math.abs(sum - val);
+                     if(!best || diff < best.diff) best = { items: [options[i], options[j]], diff };
+                 }
+             }
+             
+             // Check Triple (Limit loop for performance)
+             if(!best || best.diff > 0.1) {
+                for(let i=0; i<options.length; i++) {
+                    for(let j=i; j<options.length; j++) {
+                        for(let k=j; k<options.length; k++) {
+                            const sum = options[i].denom + options[j].denom + options[k].denom;
+                            const diff = Math.abs(sum - val);
+                            if(!best || diff < best.diff) best = { items: [options[i], options[j], options[k]], diff };
+                        }
+                    }
+                }
+             }
+
+             return best;
+        };
+
+        const combo = findCombo();
+
+        if (combo && combo.items.length > 0) {
+            const items = combo.items;
+            const totalDenom = items.reduce((sum, i) => sum + i.denom, 0);
+            const totalPrice = items.reduce((sum, i) => sum + i.price, 0); // Normal price
+            
+            // BUNDLE LOGIC (Matches PHP)
+            // Flat profit on the TOTAL bundle amount, not per card
+            const flatProfit = totalDenom < 3 ? 40 : 80;
+            const bundlePrice = (totalDenom * rate) + flatProfit;
+            
+            const savings = Math.max(0, totalPrice - bundlePrice);
+
+            setResult({
+                type: items.length === 1 ? 'single' : items.length === 2 ? 'pair' : 'triple',
+                items,
+                totalDenom,
+                totalPrice,
+                bundlePrice: items.length > 1 ? bundlePrice : totalPrice, // Only discount bundles
+                savings: items.length > 1 ? savings : 0
+            });
+        } else {
+            setError("No suitable combination found.");
+        }
+    };
+
+    const handleAddBundle = () => {
+        if(!result) return;
+        result.items.forEach(item => {
+            addToCart({ ...item.variation, ...{ id: item.variation.id } } as any, 1, item.variation);
+        });
+        showToast(`Added ${result.items.length} items to cart!`, 'success');
+    };
+
+    if (options.length === 0) return null;
+
+    return (
+        <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 rounded-2xl p-6 mb-8 relative overflow-hidden shadow-2xl">
+            <div className="absolute top-0 right-0 p-4 opacity-10">
+                <i className="fas fa-calculator text-6xl text-white"></i>
+            </div>
+            
+            <h3 className="text-xl font-black text-white uppercase italic mb-2 flex items-center gap-2">
+                <i className="fas fa-magic text-yellow-400"></i> Smart Calculator
+            </h3>
+            <p className="text-gray-300 text-sm mb-6 max-w-lg">
+                Enter your desired game price (e.g. $18.49). We will find the best gift card combination and 
+                <span className="text-green-400 font-bold"> apply a bundle discount</span> to save you money!
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-6">
+                <div className="relative flex-1 w-full sm:w-auto">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+                    <input 
+                        type="number" 
+                        step="0.01" 
+                        value={target}
+                        onChange={(e) => setTarget(e.target.value)}
+                        placeholder="Target Amount (USD)" 
+                        className="w-full bg-dark-950 border border-white/10 rounded-xl py-3 pl-8 pr-4 text-white focus:border-primary outline-none font-mono font-bold"
+                    />
+                </div>
+                <button 
+                    onClick={handleCalculate}
+                    className="bg-primary hover:bg-primary-hover text-black font-black uppercase px-6 py-3 rounded-xl shadow-glow transition-transform active:scale-95 w-full sm:w-auto"
+                >
+                    Calculate
+                </button>
+            </div>
+
+            {error && <p className="text-red-400 text-sm font-bold bg-red-500/10 p-3 rounded-lg"><i className="fas fa-exclamation-circle"></i> {error}</p>}
+
+            {result && (
+                <div className="bg-dark-950/80 border border-white/10 rounded-xl p-5 animate-fade-in-up">
+                     <div className="flex justify-between items-start mb-4 border-b border-white/5 pb-4">
+                         <div>
+                             <p className="text-gray-400 text-xs uppercase font-bold">Suggestion</p>
+                             <div className="flex flex-wrap gap-2 mt-2">
+                                 {result.items.map((item, idx) => (
+                                     <span key={idx} className="bg-white/10 text-white font-mono font-bold px-2 py-1 rounded text-sm border border-white/10">
+                                         ${item.denom}
+                                     </span>
+                                 ))}
+                             </div>
+                             <p className="text-gray-400 text-xs mt-2">Total: <span className="text-white font-bold">${result.totalDenom.toFixed(2)}</span></p>
+                         </div>
+                         <div className="text-right">
+                             <p className="text-gray-400 text-xs uppercase font-bold">Price</p>
+                             {result.savings > 0 && (
+                                 <p className="text-xs text-red-400 line-through font-mono">৳{result.totalPrice.toFixed(0)}</p>
+                             )}
+                             <p className="text-2xl font-black text-primary">৳{result.bundlePrice.toFixed(0)}</p>
+                             {result.savings > 0 && (
+                                 <span className="bg-green-500 text-black text-[10px] font-black px-2 py-0.5 rounded uppercase">
+                                     Save ৳{result.savings.toFixed(0)}
+                                 </span>
+                             )}
+                         </div>
+                     </div>
+                     <button 
+                        onClick={handleAddBundle}
+                        className="w-full bg-green-500 hover:bg-green-400 text-black font-black uppercase py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
+                     >
+                         <i className="fas fa-cart-plus"></i> Add Bundle to Cart
+                     </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 export const ProductDetail: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -191,6 +393,11 @@ export const ProductDetail: React.FC = () => {
           
           {/* LEFT COLUMN: OPTIONS & DESCRIPTION (lg:col-span-8) */}
           <div className="lg:col-span-8 space-y-8">
+
+             {/* GIFT CARD CALCULATOR */}
+             {isVariable && product.variations && product.variations.length > 0 && (
+                 <GiftCardCalculator variations={product.variations} />
+             )}
              
              {/* VARIATION SELECTOR */}
              {isVariable ? (
