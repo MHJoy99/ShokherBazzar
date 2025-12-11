@@ -357,6 +357,7 @@ export const ProductDetail: React.FC = () => {
   const [qty, setQty] = useState(1);
   const [activeTab, setActiveTab] = useState<'desc' | 'redeem' | 'specs'>('desc');
   const { addToCart } = useCart();
+  const { showToast } = useToast();
 
   useEffect(() => {
     const fetchProductData = async () => {
@@ -575,12 +576,20 @@ export const ProductDetail: React.FC = () => {
              <div className="sticky top-24 space-y-6">
                 <div className="bg-dark-900 border border-white/5 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-blue-600"></div>
-                    <div className="bg-dark-950 rounded-xl p-4 border border-white/5 mb-6 flex items-center justify-between">
-                        <span className="text-gray-400 text-xs font-bold uppercase">Quantity</span>
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => setQty(Math.max(1, qty-1))} className="w-8 h-8 rounded bg-dark-800 hover:bg-white/10 text-white flex items-center justify-center transition-colors">-</button>
-                            <span className="w-8 text-center font-black text-white">{qty}</span>
-                            <button onClick={() => setQty(qty+1)} className="w-8 h-8 rounded bg-dark-800 hover:bg-white/10 text-white flex items-center justify-center transition-colors">+</button>
+                    <div className="bg-dark-950 rounded-xl p-4 border border-white/5 mb-6">
+                        <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-3">
+                            <span className="text-gray-400 text-xs font-bold uppercase">Item</span>
+                            <span className="text-white text-xs font-bold text-right truncate max-w-[150px]">
+                                {isVariable && selectedVariation ? selectedVariation.name : product.name}
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-gray-400 text-xs font-bold uppercase">Quantity</span>
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => setQty(Math.max(1, qty-1))} className="w-8 h-8 rounded bg-dark-800 hover:bg-white/10 text-white flex items-center justify-center transition-colors">-</button>
+                                <span className="w-8 text-center font-black text-white">{qty}</span>
+                                <button onClick={() => setQty(qty+1)} className="w-8 h-8 rounded bg-dark-800 hover:bg-white/10 text-white flex items-center justify-center transition-colors">+</button>
+                            </div>
                         </div>
                     </div>
                     <div className="flex justify-between items-end mb-8 border-b border-white/5 pb-6">
@@ -596,6 +605,10 @@ export const ProductDetail: React.FC = () => {
                     <div className="space-y-3">
                         <button 
                             onClick={() => { 
+                                if (isVariable && !selectedVariation) {
+                                    showToast("Please select a package first", "error");
+                                    return;
+                                }
                                 addToCart(product, qty, selectedVariation || undefined); 
                                 navigate('/cart'); 
                             }} 
@@ -603,7 +616,16 @@ export const ProductDetail: React.FC = () => {
                         >
                             Buy Now
                         </button>
-                        <button onClick={() => addToCart(product, qty, selectedVariation || undefined)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold uppercase tracking-wider py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95">
+                        <button 
+                            onClick={() => {
+                                if (isVariable && !selectedVariation) {
+                                    showToast("Please select a package first", "error");
+                                    return;
+                                }
+                                addToCart(product, qty, selectedVariation || undefined);
+                            }} 
+                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold uppercase tracking-wider py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95"
+                        >
                             <i className="fas fa-cart-plus"></i> Add to Cart
                         </button>
                     </div>
@@ -671,7 +693,14 @@ export const ProductDetail: React.FC = () => {
       <div className="fixed bottom-0 left-0 w-full bg-dark-900 border-t border-white/10 p-4 z-50 md:hidden flex items-center justify-between gap-4 shadow-2xl">
           <div><p className="text-[10px] text-gray-500 uppercase font-bold">Total</p><p className="text-xl font-black text-white">৳{totalPrice}</p></div>
           <button 
-              onClick={() => { addToCart(product, qty, selectedVariation || undefined); navigate('/cart'); }} 
+              onClick={() => { 
+                if (isVariable && !selectedVariation) {
+                    showToast("Please select a package first", "error");
+                    return;
+                }
+                addToCart(product, qty, selectedVariation || undefined); 
+                navigate('/cart'); 
+              }} 
               className="bg-primary text-black font-black uppercase italic py-3 px-8 rounded shadow-glow flex-1"
           >
               Buy Now

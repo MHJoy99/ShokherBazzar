@@ -147,13 +147,12 @@ export const api = {
   },
 
   createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string; guest_token?: string }> => {
-    console.group("📦 ORDER PRICING FIX (ZERO + FEE STRATEGY)");
+    console.group("📦 ORDER CREATION - STRICT MODE");
     console.log("Input Order Data:", orderData);
 
     let calculatedGrandTotal = 0;
 
-    // 1. Build Line Items but FORCE ZERO PRICE
-    // This stops backend from using its database prices (148.80)
+    // 1. Build Line Items
     const line_items = orderData.items.map((item: any) => {
         // Calculate the REAL price we want to charge
         let unitPrice = 0;
@@ -170,12 +169,13 @@ export const api = {
         const lineTotal = (unitPrice * item.quantity).toFixed(2);
         calculatedGrandTotal += parseFloat(lineTotal);
 
-        console.log(`Item: ${item.name} | Real Price: ${unitPrice} | Sent Price: 0.00`);
+        console.log(`Item: ${item.name} | VarID: ${item.selectedVariation?.id} | Sent Price: 0.00 | Real: ${unitPrice}`);
 
-        return {
+        // STRICT PAYLOAD CONSTRUCTION
+        // Explicitly ensuring variation_id is a number if it exists
+        const lineItemPayload: any = {
             product_id: item.id,
             quantity: item.quantity,
-            variation_id: item.selectedVariation?.id,
             // FORCE BACKEND TO SEE ZERO COST FOR ITEMS
             subtotal: '0.00',
             total: '0.00',
@@ -184,12 +184,22 @@ export const api = {
                 { key: '_pricing_logic', value: 'frontend_calculated' }
             ]
         };
+
+        if (item.selectedVariation && item.selectedVariation.id) {
+            lineItemPayload.variation_id = Number(item.selectedVariation.id);
+            // Redundant check: Add variation info to metadata so admin can see it even if ID linking fails
+            lineItemPayload.meta_data.push({ 
+                key: 'Selected Option', 
+                value: `${item.selectedVariation.name} (ID: ${item.selectedVariation.id})` 
+            });
+        }
+
+        return lineItemPayload;
     });
 
     console.log(`🧮 Correct Grand Total: ${calculatedGrandTotal.toFixed(2)}`);
 
     // 2. Add the ENTIRE amount as a Fee
-    // This bypasses all product pricing logic in backend
     const fee_lines = [
         {
             name: "Order Total (Products)",
@@ -212,7 +222,7 @@ export const api = {
         customer_id: orderData.customer_id || 0,
         billing: orderData.billing,
         line_items,
-        fee_lines, // <--- THIS IS THE KEY FIX
+        fee_lines, 
         coupon_lines,
         meta_data,
         trxId: orderData.trxId, 
