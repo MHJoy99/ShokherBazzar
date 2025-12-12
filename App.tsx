@@ -22,7 +22,8 @@ const CategoryPage = lazy(() => import('./pages/CategoryPage').then(module => ({
 const Admin = lazy(() => import('./pages/Admin').then(module => ({ default: module.Admin })));
 const NotFound = lazy(() => import('./pages/NotFound').then(module => ({ default: module.NotFound })));
 const DynamicPage = lazy(() => import('./pages/DynamicPage').then(module => ({ default: module.DynamicPage })));
-const TrackOrder = lazy(() => import('./pages/TrackOrder').then(module => ({ default: module.TrackOrder }))); // NEW
+const TrackOrder = lazy(() => import('./pages/TrackOrder').then(module => ({ default: module.TrackOrder }))); 
+const SearchPage = lazy(() => import('./pages/SearchPage').then(module => ({ default: module.SearchPage }))); // NEW
 
 // Lazy load Auth & Static pages which export multiple components
 const AuthPages = import('./pages/AuthPages');
@@ -78,6 +79,9 @@ const App: React.FC = () => {
                             {/* Standard Category Route */}
                             <Route path="/category/:slug" element={<CategoryPage />} />
                             
+                            {/* NEW: Dedicated Search Route */}
+                            <Route path="/search" element={<SearchPage />} />
+
                             {/* Legacy SEO Route (e.g., old WordPress links) */}
                             <Route path="/product-category/:slug" element={<CategoryPage />} />
                             

@@ -4,14 +4,26 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useCart } from '../context/CartContext';
 import { Product } from '../types';
+import { api } from '../lib/api';
 
 export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
   const { addToCart } = useCart();
   const isVar = product.variations && product.variations.length > 0;
   const price = isVar ? `From ৳${Math.min(...product.variations!.map(v => parseFloat(v.price)))}` : `৳${product.price}`;
 
+  // PREFETCH STRATEGY: 
+  // When user hovers, we silently load the heavy data (variations).
+  const handlePrefetch = () => {
+      // The API is smart enough to check cache first.
+      api.getProduct(product.slug);
+  };
+
   return (
-    <motion.div whileHover={{ y: -8 }} className="bg-dark-900 rounded-xl overflow-hidden border border-white/5 hover:border-primary/50 transition-all group h-full flex flex-col shadow-lg hover:shadow-glow-sm">
+    <motion.div 
+        whileHover={{ y: -8 }} 
+        onMouseEnter={handlePrefetch}
+        className="bg-dark-900 rounded-xl overflow-hidden border border-white/5 hover:border-primary/50 transition-all group h-full flex flex-col shadow-lg hover:shadow-glow-sm"
+    >
        <Link 
          to={`/product/${product.slug}`} 
          state={{ preload: product }} // OPTIMISTIC UI: Pass data immediately

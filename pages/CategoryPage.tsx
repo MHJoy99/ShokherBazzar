@@ -19,26 +19,31 @@ export const CategoryPage: React.FC = () => {
       window.scrollTo(0, 0);
       if (slug) {
         try {
-            const [prods, cats] = await Promise.all([
-              api.getProducts(slug === 'all' ? 'all' : slug),
-              api.getCategories()
-            ]);
-            setProducts(prods);
+            // PERFORMANCE FIX: 
+            // Instead of querying ?category=slug (slow WP query), we get 'all' from our in-memory cache
+            // and filter client side. This allows instant category switching.
+            const allProducts = await api.getProducts('all');
+            const cats = await api.getCategories();
             
-            // Find category info for title - check against all categories
+            // Client Side Filtering
+            const filtered = slug === 'all' 
+                ? allProducts 
+                : allProducts.filter(p => p.categories.some(c => c.slug === slug));
+
+            setProducts(filtered);
+            
+            // Find category info
             const foundCat = cats.find(c => c.slug === slug);
             
             if (foundCat) {
                 setCategoryInfo(foundCat);
             } else {
-                // Fallback if not found in the initial list (unlikely with per_page=100)
-                // or if it's 'all'
                 const displaySlug = slug.replace(/-/g, ' ');
                 setCategoryInfo({ 
                     id: 0, 
                     name: slug === 'all' ? 'All Products' : displaySlug, 
                     slug: slug, 
-                    count: prods.length 
+                    count: filtered.length 
                 });
             }
         } catch (e) {

@@ -22,8 +22,7 @@ export const Navbar: React.FC = () => {
   useEffect(() => {
     const timer = setTimeout(async () => {
         if (searchQuery.length < 2) { setSearchResults([]); return; }
-        // Performance: In a real app, you'd search via API endpoint like /products?search=...
-        // For now, we fetch all (cached usually by browser) and filter locally
+        // Performance: API uses cache now, so 'all' fetch is fast
         const all = await api.getProducts('all');
         const filtered = all.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 5);
         setSearchResults(filtered);
@@ -31,14 +30,14 @@ export const Navbar: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Handle "Enter" key press
+  // Handle "Enter" key press - UPDATED to go to Search Page
   const handleKeyDown = (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
           e.preventDefault();
-          if (searchResults.length > 0) {
-              // Navigate to the first result
-              handleNavigate(searchResults[0].slug);
-          }
+          setSearchResults([]);
+          setIsMobileSearchOpen(false);
+          // Redirect to dedicated search page
+          navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
       }
   };
 
@@ -62,13 +61,6 @@ export const Navbar: React.FC = () => {
 
   // ----------------------------------------------------------------------------------
   // ⚡ EDIT NAVIGATION LINKS HERE
-  // ----------------------------------------------------------------------------------
-  // Structure:
-  // title: Main Menu Name (e.g. Gift Cards)
-  // slug:  Main Category Slug (e.g. gift-cards) -> /category/gift-cards
-  // sub:   Dropdown items. 
-  //        name: Item Name
-  //        link: WHERE IT GOES (e.g. /product/steam-wallet... OR /category/xbox)
   // ----------------------------------------------------------------------------------
   const navLinks = [
       { 
@@ -207,6 +199,12 @@ export const Navbar: React.FC = () => {
                              </div>
                           </Link>
                       ))}
+                      <div className="p-2 text-center bg-white/5">
+                           <button onClick={() => {
+                               navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+                               setSearchResults([]);
+                           }} className="text-xs text-primary font-bold uppercase hover:underline">View All Results ({searchResults.length}+)</button>
+                      </div>
                   </motion.div>
               )}
               </AnimatePresence>
@@ -275,14 +273,15 @@ export const Navbar: React.FC = () => {
                                 className="w-full bg-dark-900 border border-white/10 rounded-xl px-5 py-3 pl-12 text-white focus:border-primary outline-none" 
                             />
                             <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
-                            {searchResults.length > 0 && (
-                                <button onClick={() => handleNavigate(searchResults[0].slug)} className="absolute right-3 top-1/2 -translate-y-1/2 text-primary font-bold text-xs uppercase bg-white/10 px-2 py-1 rounded">
-                                    GO <i className="fas fa-arrow-right ml-1"></i>
-                                </button>
-                            )}
+                            <button onClick={() => {
+                                 navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+                                 setIsMobileSearchOpen(false);
+                            }} className="absolute right-3 top-1/2 -translate-y-1/2 text-primary font-bold text-xs uppercase bg-white/10 px-2 py-1 rounded">
+                                GO <i className="fas fa-arrow-right ml-1"></i>
+                            </button>
                         </div>
                         
-                        {/* MOBILE SEARCH RESULTS */}
+                        {/* MOBILE SEARCH RESULTS PREVIEW */}
                         {searchResults.length > 0 && searchQuery && (
                             <div className="mt-4 bg-dark-900 border border-white/10 rounded-xl overflow-hidden shadow-2xl max-h-[60vh] overflow-y-auto">
                                 {searchResults.map(p => (
