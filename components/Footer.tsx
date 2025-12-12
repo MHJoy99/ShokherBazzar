@@ -88,29 +88,13 @@ export const Footer: React.FC = () => {
                  </h4>
                  <p className="text-xs text-gray-500 mb-4 font-bengali">আমরা ১০০% নিরাপদ পেমেন্ট গ্রহণ করি। <span className="font-sans text-[10px] block mt-0.5">We accept 100% secure payments.</span></p>
                  
-                 {/* Updated Logos: Mixed Image & Icons for Sleek Look */}
-                 <div className="flex flex-wrap gap-3 mb-6 items-center">
-                      {/* Local Methods (Images with transparent BG) */}
-                      <div className="h-9 w-14 bg-white/5 border border-white/10 rounded flex items-center justify-center p-1 hover:bg-white/10 transition-colors" title="bKash">
-                          <img src="https://freepnglogo.com/images/all_img/1701503524bkash-logo-transparent.png" alt="bKash" className="h-full object-contain" />
-                      </div>
-                      <div className="h-9 w-14 bg-white/5 border border-white/10 rounded flex items-center justify-center p-1 hover:bg-white/10 transition-colors" title="Nagad">
-                          <img src="https://freepnglogo.com/images/all_img/1701511252nagad-logo-transparent.png" alt="Nagad" className="h-full object-contain" />
-                      </div>
-                      <div className="h-9 w-14 bg-white/5 border border-white/10 rounded flex items-center justify-center p-1 hover:bg-white/10 transition-colors" title="Rocket">
-                          <img src="https://seeklogo.com/images/D/dutch-bangla-rocket-logo-B4D1CC458D-seeklogo.com.png" alt="Rocket" className="h-full object-contain" />
-                      </div>
-                      
-                      {/* Global Cards (FontAwesome for perfect Dark Mode integration) */}
-                      <div className="h-9 w-14 bg-blue-600/10 border border-blue-500/20 rounded flex items-center justify-center text-blue-400 text-2xl hover:bg-blue-600/20 transition-colors" title="Visa">
-                          <i className="fab fa-cc-visa"></i>
-                      </div>
-                      <div className="h-9 w-14 bg-red-600/10 border border-red-500/20 rounded flex items-center justify-center text-red-400 text-2xl hover:bg-red-600/20 transition-colors" title="Mastercard">
-                          <i className="fab fa-cc-mastercard"></i>
-                      </div>
-                      <div className="h-9 w-14 bg-cyan-600/10 border border-cyan-500/20 rounded flex items-center justify-center text-cyan-400 text-2xl hover:bg-cyan-600/20 transition-colors" title="Amex">
-                          <i className="fab fa-cc-amex"></i>
-                      </div>
+                 {/* Updated: Single Image for Payment Gateway */}
+                 <div className="mb-6 bg-white/5 rounded-lg p-2 inline-block">
+                      <img 
+                        src="https://i.ibb.co.com/hx8nmxD9/One-Host-BD-Payment-Gateway.png" 
+                        alt="We accept bKash, Nagad, Rocket, Visa, Mastercard" 
+                        className="w-full max-w-[280px] h-auto object-contain opacity-90 hover:opacity-100 transition-opacity" 
+                      />
                  </div>
                  
                  <form onSubmit={handleSubscribe} className="relative group mb-6">

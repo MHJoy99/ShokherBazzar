@@ -415,17 +415,16 @@ export const Cart: React.FC = () => {
                                     className={`relative p-5 rounded-xl border-2 transition-all flex flex-col items-center gap-3 group overflow-hidden ${paymentMethod === 'uddoktapay' ? 'bg-primary/10 border-primary shadow-glow-sm' : 'bg-dark-900 border-white/10 hover:border-white/20'}`}
                                 >
                                     {paymentMethod === 'uddoktapay' && <div className="absolute top-2 right-2 text-primary"><i className="fas fa-check-circle"></i></div>}
-                                    <div className="flex items-center gap-2 grayscale group-hover:grayscale-0 transition-all opacity-80 group-hover:opacity-100">
-                                        <div className="w-10 h-10 rounded-full bg-white p-1 shadow-sm overflow-hidden flex items-center justify-center">
-                                            <img src="https://freepnglogo.com/images/all_img/1701503524bkash-logo-transparent.png" className="h-full object-contain" alt="bKash" />
-                                        </div>
-                                        <div className="w-10 h-10 rounded-full bg-white p-1 shadow-sm overflow-hidden flex items-center justify-center">
-                                            <img src="https://freepnglogo.com/images/all_img/1701511252nagad-logo-transparent.png" className="h-full object-contain" alt="Nagad" />
-                                        </div>
-                                        <div className="w-10 h-10 rounded-full bg-white p-1 shadow-sm overflow-hidden flex items-center justify-center">
-                                            <img src="https://seeklogo.com/images/D/dutch-bangla-rocket-logo-B4D1CC458D-seeklogo.com.png" className="h-full object-contain" alt="Rocket" />
-                                        </div>
+                                    
+                                    {/* UPDATED: AUTOMATIC PAYMENT GATEWAY BANNER */}
+                                    <div className="w-full h-12 flex items-center justify-center overflow-hidden rounded mb-2">
+                                        <img 
+                                            src="https://i.ibb.co.com/kVfXmPb9/photo-2025-12-12-18-46-30.jpg" 
+                                            alt="bKash Nagad Rocket" 
+                                            className="h-full object-contain grayscale group-hover:grayscale-0 transition-all opacity-80 group-hover:opacity-100" 
+                                        />
                                     </div>
+                                    
                                     <span className="text-xs font-bold text-white uppercase">{config.payment.methodTitle}</span>
                                     <span className="text-[10px] text-green-500">Automated • Instant</span>
                                 </button>
