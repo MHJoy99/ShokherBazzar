@@ -378,6 +378,7 @@ export const ProductDetail: React.FC = () => {
       if (!slug) return;
       
       setLoadingRelated(true);
+      // Only set loading if we don't have preload data
       if (!product) setLoadingMain(true);
       
       setRelatedProducts([]);
@@ -385,8 +386,15 @@ export const ProductDetail: React.FC = () => {
       window.scrollTo(0, 0);
 
       const data = await api.getProduct(slug);
-      setProduct(data || null);
-      if (data?.variations && data.variations.length > 0) setSelectedVariation(data.variations[0]);
+      
+      // Update product with full details (including variations)
+      if (data) {
+          setProduct(data);
+          // Auto-select first variation if available
+          if (data.variations && data.variations.length > 0) {
+              setSelectedVariation(data.variations[0]);
+          }
+      }
       
       setLoadingMain(false);
 
@@ -422,13 +430,15 @@ export const ProductDetail: React.FC = () => {
     fetchProductData();
   }, [slug]);
 
-  if (loadingMain) return <div className="min-h-screen bg-dark-950 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary shadow-glow"></div></div>;
+  if (loadingMain && !product) return <div className="min-h-screen bg-dark-950 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary shadow-glow"></div></div>;
   if (!product) return <div className="min-h-screen flex items-center justify-center text-white">Product not found</div>;
 
-  const isVariable = product.variations && product.variations.length > 0;
+  const isVariable = product.type === 'variable' || (product.variations && product.variations.length > 0);
+  // Check if variations are actually loaded
+  const variationsLoaded = product.variations && product.variations.length > 0;
   
   // DETECT IF THIS IS A GIFT CARD (for calculator)
-  const isGiftCard = isVariable && product.variations!.some(v => /\d/.test(v.name));
+  const isGiftCard = isVariable && variationsLoaded && product.variations!.some(v => /\d/.test(v.name));
 
   // Price Calculation logic
   let displayPrice = "0";
@@ -511,33 +521,43 @@ export const ProductDetail: React.FC = () => {
              {isVariable ? (
                 <div className="bg-dark-900 border border-white/5 rounded-2xl p-6 shadow-xl">
                     <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-6 border-b border-white/5 pb-4">Select Denomination</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {product.variations!.map((variation) => {
-                           const isSelected = selectedVariation?.id === variation.id;
-                           return (
-                            <button 
-                                key={variation.id} 
-                                onClick={() => { setSelectedVariation(variation); setQty(1); }} 
-                                className={`relative flex items-center justify-between p-4 rounded-xl border transition-all duration-200 group overflow-hidden ${isSelected ? 'bg-primary/10 border-primary shadow-glow-sm' : 'bg-dark-950 border-white/5 hover:border-white/20'}`}
-                            >
-                                <div className="flex items-center gap-4 relative z-10">
-                                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl transition-colors ${isSelected ? 'bg-primary text-black' : 'bg-dark-800 text-gray-500 group-hover:text-white'}`}>
-                                        <i className={`fab fa-${product.platform?.toLowerCase() === 'steam' ? 'steam' : product.platform?.toLowerCase() === 'android' ? 'android' : 'playstation'}`}></i>
+                    
+                    {!variationsLoaded ? (
+                         // OPTIMIZED: Specific Skeleton for variations while they load
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             {[1,2,3,4].map(i => (
+                                 <div key={i} className="h-20 bg-dark-950 border border-white/5 rounded-xl animate-pulse"></div>
+                             ))}
+                         </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {product.variations!.map((variation) => {
+                            const isSelected = selectedVariation?.id === variation.id;
+                            return (
+                                <button 
+                                    key={variation.id} 
+                                    onClick={() => { setSelectedVariation(variation); setQty(1); }} 
+                                    className={`relative flex items-center justify-between p-4 rounded-xl border transition-all duration-200 group overflow-hidden ${isSelected ? 'bg-primary/10 border-primary shadow-glow-sm' : 'bg-dark-950 border-white/5 hover:border-white/20'}`}
+                                >
+                                    <div className="flex items-center gap-4 relative z-10">
+                                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl transition-colors ${isSelected ? 'bg-primary text-black' : 'bg-dark-800 text-gray-500 group-hover:text-white'}`}>
+                                            <i className={`fab fa-${product.platform?.toLowerCase() === 'steam' ? 'steam' : product.platform?.toLowerCase() === 'android' ? 'android' : 'playstation'}`}></i>
+                                        </div>
+                                        <div className="text-left">
+                                            <div className={`font-bold text-sm uppercase tracking-wide ${isSelected ? 'text-white' : 'text-gray-400 group-hover:text-white'}`}>{variation.name}</div>
+                                            <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold uppercase"><i className="fas fa-bolt"></i> Instant</div>
+                                        </div>
                                     </div>
-                                    <div className="text-left">
-                                        <div className={`font-bold text-sm uppercase tracking-wide ${isSelected ? 'text-white' : 'text-gray-400 group-hover:text-white'}`}>{variation.name}</div>
-                                        <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold uppercase"><i className="fas fa-bolt"></i> Instant</div>
+                                    <div className="text-right relative z-10">
+                                        <div className="text-xs text-gray-500 line-through font-mono">৳{variation.regular_price || (parseFloat(variation.price) * 1.1).toFixed(0)}</div>
+                                        <div className={`text-lg font-black ${isSelected ? 'text-primary' : 'text-white'}`}>৳{variation.price}</div>
                                     </div>
-                                </div>
-                                <div className="text-right relative z-10">
-                                    <div className="text-xs text-gray-500 line-through font-mono">৳{variation.regular_price || (parseFloat(variation.price) * 1.1).toFixed(0)}</div>
-                                    <div className={`text-lg font-black ${isSelected ? 'text-primary' : 'text-white'}`}>৳{variation.price}</div>
-                                </div>
-                                {isSelected && <div className="absolute inset-0 border-2 border-primary rounded-xl pointer-events-none"></div>}
-                            </button>
-                           );
-                        })}
-                    </div>
+                                    {isSelected && <div className="absolute inset-0 border-2 border-primary rounded-xl pointer-events-none"></div>}
+                                </button>
+                            );
+                            })}
+                        </div>
+                    )}
                 </div>
              ) : (
                  <div className="bg-dark-900 border border-white/5 rounded-2xl p-6 shadow-xl flex items-center gap-6">
@@ -612,7 +632,14 @@ export const ProductDetail: React.FC = () => {
                              {parseFloat(regularPrice) > parseFloat(displayPrice) && (
                                  <div className="text-xs text-gray-500 line-through mb-1">৳{(parseFloat(regularPrice) * qty).toFixed(0)}</div>
                              )}
-                             <div className="text-4xl font-black text-primary tracking-tight">৳{totalPrice}</div>
+                             
+                             {/* PRICE LOADING STATE */}
+                             {!isVariable || variationsLoaded ? (
+                                <div className="text-4xl font-black text-primary tracking-tight">৳{totalPrice}</div>
+                             ) : (
+                                <div className="h-10 w-32 bg-dark-950 animate-pulse rounded"></div>
+                             )}
+                             
                              <div className="text-[10px] text-gray-500 font-mono mt-1">Credits Earned: {(parseFloat(totalPrice) * 0.01).toFixed(0)}</div>
                         </div>
                     </div>
@@ -626,9 +653,10 @@ export const ProductDetail: React.FC = () => {
                                 addToCart(product, qty, selectedVariation || undefined); 
                                 navigate('/cart'); 
                             }} 
-                            className="w-full bg-primary hover:bg-primary-hover text-black font-black uppercase italic tracking-wider py-4 rounded-xl shadow-glow transition-all transform active:scale-95"
+                            disabled={isVariable && !variationsLoaded}
+                            className="w-full bg-primary hover:bg-primary-hover text-black font-black uppercase italic tracking-wider py-4 rounded-xl shadow-glow transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Buy Now
+                            {isVariable && !variationsLoaded ? 'Loading...' : 'Buy Now'}
                         </button>
                         <button 
                             onClick={() => {
@@ -638,7 +666,8 @@ export const ProductDetail: React.FC = () => {
                                 }
                                 addToCart(product, qty, selectedVariation || undefined);
                             }} 
-                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold uppercase tracking-wider py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95"
+                            disabled={isVariable && !variationsLoaded}
+                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold uppercase tracking-wider py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <i className="fas fa-cart-plus"></i> Add to Cart
                         </button>
@@ -706,7 +735,14 @@ export const ProductDetail: React.FC = () => {
       
       {/* MOBILE FLOATING CTA (Replaces old sticky footer, hidden on Desktop, respects Bottom Nav) */}
       <div className="fixed bottom-16 left-0 w-full bg-dark-900 border-t border-white/10 p-4 z-40 md:hidden flex items-center justify-between gap-4 shadow-2xl safe-area-bottom">
-          <div><p className="text-[10px] text-gray-500 uppercase font-bold">Total</p><p className="text-xl font-black text-white">৳{totalPrice}</p></div>
+          <div>
+            <p className="text-[10px] text-gray-500 uppercase font-bold">Total</p>
+            {isVariable && !variationsLoaded ? (
+                <div className="h-6 w-16 bg-white/10 animate-pulse rounded"></div>
+            ) : (
+                <p className="text-xl font-black text-white">৳{totalPrice}</p>
+            )}
+          </div>
           <button 
               onClick={() => { 
                 if (isVariable && !selectedVariation) {
@@ -716,9 +752,10 @@ export const ProductDetail: React.FC = () => {
                 addToCart(product, qty, selectedVariation || undefined); 
                 navigate('/cart'); 
               }} 
-              className="bg-primary text-black font-black uppercase italic py-3 px-8 rounded shadow-glow flex-1"
+              disabled={isVariable && !variationsLoaded}
+              className="bg-primary text-black font-black uppercase italic py-3 px-8 rounded shadow-glow flex-1 disabled:opacity-50"
           >
-              Buy Now
+              {isVariable && !variationsLoaded ? 'Loading...' : 'Buy Now'}
           </button>
       </div>
     </div>
