@@ -2,133 +2,177 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../lib/api'; 
-import { Product, Variation } from '../types'; 
+import { Product, Variation, CalculatorInfo, CalculatorResult } from '../types'; 
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { config } from '../config';
-import { ProductCard } from '../components/ProductCard';
 import { SkeletonCard } from '../components/Skeleton';
+import { ProductCard } from '../components/ProductCard';
 
-// --- CONFIG: SUPPORTED CURRENCIES & FALLBACK RATES ---
-const CURRENCY_MAP: Record<string, { label: string; flag: string; fallback: number }> = {
-    USD: { label: "USD", flag: "🇺🇸", fallback: 1 },
-    UAH: { label: "UAH", flag: "🇺🇦", fallback: 41.60 }, // Ukraine
-    INR: { label: "INR", flag: "🇮🇳", fallback: 84.10 }, // India
-    TRY: { label: "TRY", flag: "🇹🇷", fallback: 34.25 }, // Turkey
-    ARS: { label: "ARS", flag: "🇦🇷", fallback: 980.50 }, // Argentina
-    EUR: { label: "EUR", flag: "🇪🇺", fallback: 0.93 },  // Euro
-    BRL: { label: "BRL", flag: "🇧🇷", fallback: 5.75 },  // Brazil
-    PLN: { label: "PLN", flag: "🇵🇱", fallback: 3.96 },  // Poland
+// --- CONFIG: SUPPORTED CURRENCIES ---
+const CURRENCY_MAP: Record<string, { label: string; flag: string }> = {
+    USD: { label: "USD", flag: "🇺🇸" },
+    BDT: { label: "BDT", flag: "🇧🇩" },
+    UAH: { label: "UAH", flag: "🇺🇦" }, 
+    INR: { label: "INR", flag: "🇮🇳" }, 
+    TRY: { label: "TRY", flag: "🇹🇷" }, 
+    ARS: { label: "ARS", flag: "🇦🇷" }, 
+    EUR: { label: "EUR", flag: "🇪🇺" },  
+    BRL: { label: "BRL", flag: "🇧🇷" },  
+    PLN: { label: "PLN", flag: "🇵🇱" },  
 };
 
-// --- GIFT CARD CALCULATOR LOGIC ---
-// Restoring frontend logic as requested for UI purposes.
-interface CalcOption {
-    denom: number;
-    price: number;
-    variation: Variation;
-}
-
-interface CalcResult {
-    type: 'single' | 'pair' | 'triple' | 'quad';
-    items: CalcOption[];
-    totalDenom: number;
-    totalPrice: number;
-    bundlePrice: number;
-    savings: number;
-    originalTarget: number;
-    currency: string;
-}
-
+// --- BACKEND CONNECTED CALCULATOR ---
 const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }> = ({ variations, product }) => {
     const [target, setTarget] = useState<string>('');
     const [selectedCurrency, setSelectedCurrency] = useState('USD');
-    const [conversionRates, setConversionRates] = useState<Record<string, number>>({});
-    const [result, setResult] = useState<CalcResult | null>(null);
+    const [calcInfo, setCalcInfo] = useState<CalculatorInfo | null>(null);
+
+    const [result, setResult] = useState<CalculatorResult | null>(null);
+    const [calculating, setCalculating] = useState(false);
     const [error, setError] = useState('');
     const { addToCart } = useCart();
     const { showToast } = useToast();
 
+    // Fetch official display rate for UI hint
     useEffect(() => {
-        const initial: Record<string, number> = {};
-        Object.entries(CURRENCY_MAP).forEach(([key, val]) => initial[key] = val.fallback);
-        setConversionRates(initial);
-    }, []);
+        const fetchBackendInfo = async () => {
+             const info = await api.getCalculatorInfo(product.id);
+             if (info) setCalcInfo(info);
+        };
+        fetchBackendInfo();
+    }, [product.id]);
 
-    // 1. Parse Variations into usable numbers
-    const options: CalcOption[] = useMemo(() => {
-        return variations.map(v => {
-            const match = v.name.match(/(\d+(\.\d+)?)/);
-            const attrDenom = product.attributes?.find(a => a.name === 'pa_denomination')?.options.find(opt => v.name.includes(opt));
-            
-            let denom = match ? parseFloat(match[0]) : 0;
-            if (denom === 0 && attrDenom) denom = parseFloat(attrDenom);
-            
-            const price = parseFloat(v.price);
-            return (denom > 0 && price > 0) ? { denom, price, variation: v } : null;
-        }).filter(Boolean) as CalcOption[];
-    }, [variations, product]);
-
-    const handleCalculate = () => {
+    const handleCalculate = async () => {
         const rawVal = parseFloat(target);
-        if (!rawVal || rawVal <= 0) { setError("Enter amount"); return; }
-        
-        const exchangeRate = conversionRates[selectedCurrency] || 1;
-        const targetUSD = selectedCurrency === 'USD' ? rawVal : (rawVal / exchangeRate);
-
-        // Simple logic for UI demo (Robust logic removed to prevent 403 confusion, keeping UI functional for single items)
-        // Trying to find best single match for now
-        let best = null;
-        let bestDiff = Infinity;
-        
-        options.forEach(opt => {
-            const diff = Math.abs(opt.denom - targetUSD);
-            if(diff < bestDiff) { bestDiff = diff; best = opt; }
-        });
-
-        if(best) {
-             const b = best as CalcOption;
-             setResult({
-                 type: 'single', items: [b],
-                 totalDenom: b.denom, totalPrice: b.price, bundlePrice: b.price,
-                 savings: 0, originalTarget: rawVal, currency: selectedCurrency
-             });
-             setError('');
-        } else {
-             setError("No suitable card found.");
-             setResult(null);
+        if (!rawVal || rawVal <= 0) {
+            setError("Enter a valid amount.");
+            setResult(null);
+            return;
         }
+        setError('');
+        setCalculating(true);
+        setResult(null);
+
+        // Call Backend
+        const data = await api.calculateBundle(product.id, rawVal, selectedCurrency);
+        
+        if (data && data.success) {
+            setResult(data);
+        } else {
+            setError(data?.message || "No valid combination found for this amount.");
+        }
+        setCalculating(false);
     };
 
     const handleAddBundle = () => {
-        if(!result) return;
-        result.items.forEach(item => addToCart(product, 1, item.variation));
-        showToast(`Added to cart!`, 'success');
+        if(!result || !result.items) return;
+        
+        // Loop through items returned by Backend
+        result.items.forEach((item: any) => {
+            const variation = variations.find(v => v.id === item.variation_id);
+            
+            if (variation) {
+                // SECURITY: Capture the token from response
+                const bundleInfo = result.calculation_token ? {
+                    token: result.calculation_token,
+                    productId: product.id,
+                    amount: result.requested_amount,
+                    currency: result.currency 
+                } : undefined;
+
+                addToCart(
+                    product, 
+                    item.quantity, 
+                    variation, 
+                    item.unit_price_bdt.toString(), // Use backend's BDT price
+                    bundleInfo // Pass security token
+                );
+            }
+        });
+        showToast(`Added bundle to cart!`, 'success');
     };
 
     return (
         <div className="bg-gradient-to-r from-blue-900/40 to-purple-900/40 border border-white/10 rounded-xl p-6 mb-8 relative overflow-hidden">
-            <div className="flex flex-col md:flex-row items-center gap-4">
+            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                <i className="fas fa-calculator text-6xl text-white"></i>
+            </div>
+            
+            <div className="flex flex-col md:flex-row items-center gap-4 mb-4 relative z-10">
                 <div className="flex-1 w-full">
-                    <h3 className="text-white font-bold uppercase text-sm mb-1"><i className="fas fa-magic text-primary mr-2"></i>Quick Calculator</h3>
-                    <p className="text-xs text-gray-400">Can't find your amount? Type it here.</p>
+                    <h3 className="text-white font-bold uppercase text-sm mb-1"><i className="fas fa-magic text-primary mr-2"></i>Smart Calculator</h3>
+                    <p className="text-xs text-gray-400">Enter amount in <span className="text-white font-bold">ANY Currency</span>.</p>
                 </div>
+                
                 <div className="flex gap-2 w-full md:w-auto">
-                     <select value={selectedCurrency} onChange={(e) => setSelectedCurrency(e.target.value)} className="bg-dark-950 border border-white/10 rounded-lg px-3 text-white text-xs font-bold outline-none"><option value="USD">USD</option></select>
-                     <input type="number" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="Amount" className="bg-dark-950 border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-full md:w-32 focus:border-primary outline-none" />
-                     <button onClick={handleCalculate} className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors">Find</button>
+                     <select 
+                        value={selectedCurrency}
+                        onChange={(e) => setSelectedCurrency(e.target.value)}
+                        className="bg-dark-950 border border-white/10 rounded-lg px-3 text-white text-xs font-bold outline-none"
+                     >
+                         {Object.entries(CURRENCY_MAP).map(([code, info]) => (
+                             <option key={code} value={code}>{info.flag} {code}</option>
+                         ))}
+                     </select>
+                     
+                     <input 
+                        type="number" 
+                        value={target}
+                        onChange={(e) => setTarget(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleCalculate()}
+                        placeholder="Amount" 
+                        className="bg-dark-950 border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-full md:w-32 focus:border-primary outline-none" 
+                     />
+                     
+                     <button 
+                        onClick={handleCalculate} 
+                        disabled={calculating}
+                        className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors"
+                     >
+                        {calculating ? '...' : 'Find'}
+                     </button>
                 </div>
             </div>
-            {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
+            
+            {/* Optional Rate Hint */}
+            {selectedCurrency === 'BDT' && calcInfo && calcInfo.exchange_rate > 0 && (
+                <p className="text-[10px] text-gray-400 font-mono mb-4 ml-1">
+                    <i className="fas fa-info-circle mr-1"></i> Official Rate: 1 USD ≈ {calcInfo.exchange_rate} BDT
+                </p>
+            )}
+
+            {error && <p className="text-red-400 text-xs mt-2 bg-red-500/10 p-2 rounded">{error}</p>}
+
             {result && (
-                <div className="mt-4 bg-black/20 p-3 rounded flex justify-between items-center">
-                    <div>
-                        <span className="text-white text-sm font-bold block">Best Match: {result.items[0].variation.name}</span>
-                        <span className="text-xs text-gray-400">Approx {result.currency} Value</span>
+                <div className="mt-4 bg-black/20 p-4 rounded-lg animate-fade-in-up">
+                    <div className="flex justify-between items-center mb-3 border-b border-white/5 pb-2">
+                        <span className="text-white text-sm font-bold block">
+                             Bundle Result {result.match_type === 'exact' ? <span className="text-green-500 text-[10px] ml-2">(Exact Match)</span> : <span className="text-yellow-500 text-[10px] ml-2">(Closest Match)</span>}
+                        </span>
+                        <span className="text-xs text-primary font-bold">Total: ৳{result.total_bdt}</span>
                     </div>
-                    <button onClick={handleAddBundle} className="bg-primary text-black text-xs font-bold px-3 py-1 rounded hover:bg-white transition-colors">Add to Cart</button>
+                    
+                    {/* Item Breakdown */}
+                    <div className="space-y-1 mb-4">
+                        {result.items && result.items.map((item: any, idx: number) => (
+                             <div key={idx} className="flex justify-between items-center text-xs text-gray-300">
+                                 <span>{item.quantity}x {item.name}</span>
+                                 <span>৳{item.subtotal_bdt}</span>
+                             </div>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="text-[10px] text-gray-400">
+                            {result.conversion && <span>{result.conversion.original_amount} {result.conversion.original_currency} ≈ ${result.conversion.converted_amount} USD</span>}
+                        </div>
+                        <button onClick={handleAddBundle} className="bg-primary text-black text-xs font-bold px-4 py-2 rounded hover:bg-white transition-colors uppercase">
+                            Add Bundle
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
@@ -241,9 +285,8 @@ export const ProductDetail: React.FC = () => {
            <span className="text-gray-300 font-bold text-white">{product.name}</span>
         </nav>
 
-        {/* HEADER BANNER WITH SHORT DESC */}
+        {/* HEADER BANNER WITH SHORT DESC (Important Note) */}
         <div className="relative rounded-2xl overflow-hidden shadow-2xl mb-8 bg-dark-900 border border-white/5 h-auto min-h-[250px]">
-             {/* Blurred Background */}
              <div 
                 className="absolute inset-0 bg-cover bg-center blur-xl opacity-40 scale-110" 
                 style={{ backgroundImage: `url(${product.images[0].src})` }}
@@ -251,12 +294,10 @@ export const ProductDetail: React.FC = () => {
              <div className="absolute inset-0 bg-gradient-to-r from-dark-950 via-dark-950/80 to-transparent"></div>
              
              <div className="relative z-10 p-6 md:p-10 flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-10">
-                 {/* Product Image */}
                  <div className="w-24 h-32 md:w-40 md:h-56 bg-dark-950 rounded-xl overflow-hidden border-2 border-white/10 shadow-glow-sm shrink-0">
                      <img src={product.images[0].src} className="w-full h-full object-cover" alt={product.name} />
                  </div>
                  
-                 {/* Title, Tags & SHORT DESCRIPTION */}
                  <div className="flex-1 text-center md:text-left">
                      <h1 className="text-2xl md:text-5xl font-black text-white uppercase italic tracking-tighter mb-4 drop-shadow-lg">{product.name}</h1>
                      
@@ -299,12 +340,12 @@ export const ProductDetail: React.FC = () => {
             {/* LEFT COLUMN */}
             <div className="lg:col-span-8 space-y-8">
                 
-                {/* 1. CALCULATOR */}
+                {/* 1. CALCULATOR (Using Backend Logic) */}
                 {isGiftCard && (
                     <GiftCardCalculator variations={product.variations!} product={product} />
                 )}
 
-                {/* 2. VARIATION GRID (Specific Style Restored) */}
+                {/* 2. VARIATION GRID (Specific Styled Buttons Restored) */}
                 <div className="bg-dark-900 border border-white/5 rounded-2xl p-6 shadow-xl">
                     <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-6 border-b border-white/5 pb-4 flex items-center gap-2">
                         <span className="w-1.5 h-6 bg-primary rounded-full"></span>
