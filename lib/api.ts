@@ -231,20 +231,65 @@ export const api = {
   },
 
   // SECURITY: SECURE BUNDLE CALCULATION
-  calculateBundle: async (productId: number, amount: number, currency: string) => {
+  calculateBundle: async (productId: number | string, amount: number | string, currency: string = 'USD') => {
       try {
+          // Explicitly cast to Ensure Numbers are sent to backend
+          const payload = {
+              productId: Number(productId),
+              amount: Number(amount),
+              currency: String(currency)
+          };
+
+          // Pre-flight check
+          if (isNaN(payload.productId) || payload.productId <= 0) throw new Error("Invalid Product ID");
+          if (isNaN(payload.amount) || payload.amount <= 0) throw new Error("Invalid Amount");
+
           const response = await fetch(`${CUSTOM_API_URL}/calculate-bundle`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ productId, amount, currency })
+              body: JSON.stringify(payload)
           });
           
           if (!response.ok) {
               const err = await response.json();
-              throw new Error(err.message || 'Bundle calculation failed');
+              console.error("Bundle Calculation API Error:", err);
+              throw new Error(err.message || `Calculation failed (${response.status})`);
           }
-          return response.json();
+          
+          // --- RESPONSE MAPPING LAYER ---
+          // Backend sends snake_case (standard PHP/WP). Frontend needs camelCase.
+          const data = await response.json();
+          
+          return {
+              success: data.success,
+              
+              // Map: calculation_token -> calculationToken
+              calculationToken: data.calculation_token, 
+              
+              // Map: total_bdt -> totalBDT
+              totalBDT: data.total_bdt,                
+              
+              // Map: currency -> currency
+              currency: data.currency || 'USD',
+              
+              requestedAmount: data.requested_amount || payload.amount,
+              
+              items: Array.isArray(data.items) ? data.items.map((i: any) => ({
+                  // Map: variation_id -> variationId
+                  variationId: i.variation_id,         
+                  
+                  quantity: i.quantity,
+                  
+                  // Map: subtotal_bdt -> subtotalBDT
+                  // Fallback to unit_price_bdt * quantity if subtotal missing
+                  subtotalBDT: i.subtotal_bdt ?? (i.unit_price_bdt * i.quantity),
+                  
+                  denomination: i.denomination || 0
+              })) : []
+          };
+
       } catch (error) {
+          console.error("calculateBundle Exception:", error);
           throw error;
       }
   },
@@ -264,11 +309,12 @@ export const api = {
         // SECURITY: Attach Token if this is a Gift Card (Product 9042)
         if (item.id === config.pricing.giftCardProductId && item.calculationToken) {
             payload.meta_data = [
+                // MUST USE UNDERSCORE PREFIX for Backend Validation
                 { key: '_calculation_token', value: item.calculationToken },
                 { key: '_calculator_currency', value: item.calculatorCurrency || 'USD' }
             ];
-            // Override price if bundle logic requires it, but usually standard flow respects variation price.
-            // However, custom bundles might use the calculated bundle price.
+            
+            // Override price if bundle logic requires it
             if (item.custom_price) {
                  payload.total = item.custom_price;
             }

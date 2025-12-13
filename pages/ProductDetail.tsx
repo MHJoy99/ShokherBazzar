@@ -35,7 +35,9 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
 
     const handleCalculate = async () => {
         const rawVal = parseFloat(target);
-        if (!rawVal || rawVal <= 0) {
+        
+        // Strict Validation to avoid 400 Bad Request
+        if (isNaN(rawVal) || rawVal <= 0) {
             setError("Enter a valid amount.");
             setResult(null);
             return;
@@ -70,11 +72,16 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
             // Find variation object to pass full data
             const variation = variations.find(v => v.id === item.variationId);
             
+            // Safe conversion to avoid 'toString of undefined' error
+            const priceOverride = (item.subtotalBDT !== undefined && item.subtotalBDT !== null) 
+                ? String(item.subtotalBDT) 
+                : "0";
+
             addToCart(
                 product, 
                 item.quantity, 
                 variation, 
-                item.subtotalBDT.toString(), // Custom Price from Backend
+                priceOverride, // Custom Price from Backend
                 {
                     token: result.calculationToken,
                     currency: result.currency,
@@ -322,11 +329,16 @@ export const ProductDetail: React.FC = () => {
                // Or just use the selectedVariation if IDs match
                const matchedVar = product.variations?.find(v => v.id === item.variationId) || selectedVariation;
                
+               // Robust Handling: ensure price is string
+               const priceOverride = (item.subtotalBDT !== undefined && item.subtotalBDT !== null) 
+                   ? String(item.subtotalBDT) 
+                   : "0";
+
                addToCart(
                    product,
                    item.quantity,
                    matchedVar,
-                   item.subtotalBDT.toString(),
+                   priceOverride,
                    {
                        token: data.calculationToken,
                        currency: data.currency,
