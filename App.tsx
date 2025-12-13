@@ -13,6 +13,7 @@ import { SkeletonHero } from './components/Skeleton';
 import { WhatsAppFloat } from './components/WhatsAppFloat';
 import { ScrollToTop } from './components/ScrollToTop';
 import { MobileBottomNav } from './components/MobileBottomNav';
+import { ErrorBoundary } from './components/ErrorBoundary'; // NEW
 
 // Lazy Load Pages to reduce bundle size
 const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
@@ -23,7 +24,7 @@ const Admin = lazy(() => import('./pages/Admin').then(module => ({ default: modu
 const NotFound = lazy(() => import('./pages/NotFound').then(module => ({ default: module.NotFound })));
 const DynamicPage = lazy(() => import('./pages/DynamicPage').then(module => ({ default: module.DynamicPage })));
 const TrackOrder = lazy(() => import('./pages/TrackOrder').then(module => ({ default: module.TrackOrder }))); 
-const SearchPage = lazy(() => import('./pages/SearchPage').then(module => ({ default: module.SearchPage }))); // NEW
+const SearchPage = lazy(() => import('./pages/SearchPage').then(module => ({ default: module.SearchPage }))); 
 
 // Lazy load Auth & Static pages which export multiple components
 const AuthPages = import('./pages/AuthPages');
@@ -65,6 +66,7 @@ const PageLoader = () => (
 const App: React.FC = () => {
   return (
     <HelmetProvider>
+      <ErrorBoundary>
         <ToastProvider>
         <AuthProvider>
             <CartProvider>
@@ -109,6 +111,7 @@ const App: React.FC = () => {
             </CartProvider>
         </AuthProvider>
         </ToastProvider>
+      </ErrorBoundary>
     </HelmetProvider>
   );
 };

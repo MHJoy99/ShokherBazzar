@@ -6,10 +6,8 @@ export const config = {
     
     // CENTRALIZED PRICING CONTROL
     pricing: {
-        baseRate: 132,      // 1 USD = 132 BDT
-        profitTier1: 40,    // Profit for small bundles (< $3)
-        profitTier2: 80,    // Profit for large bundles (>= $3)
-        profitTierThreshold: 3 // Threshold in USD
+        baseRate: 135,       // Default Rate (1 USD = 135 BDT)
+        defaultProfit: 80,   // Fixed Profit Amount in BDT (e.g. adds 80tk to base cost)
     },
 
     payment: {

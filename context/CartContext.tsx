@@ -5,7 +5,18 @@ import { useToast } from './ToastContext';
 
 interface CartContextType {
   items: CartItem[];
-  addToCart: (product: Product, quantity?: number, variation?: Variation, customPrice?: string) => void;
+  addToCart: (
+      product: Product, 
+      quantity?: number, 
+      variation?: Variation, 
+      customPrice?: string, 
+      bundleInfo?: { 
+          token: string; 
+          productId: number; 
+          amount: number;
+          currency: string; // NEW
+      }
+  ) => void;
   removeFromCart: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, quantity: number) => void;
   clearCart: () => void;
@@ -25,7 +36,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => { localStorage.setItem('cart_items', JSON.stringify(items)); }, [items]);
 
-  const addToCart = (product: Product, quantity = 1, variation?: Variation, customPrice?: string) => {
+  const addToCart = (product: Product, quantity = 1, variation?: Variation, customPrice?: string, bundleInfo?: { token: string; productId: number; amount: number; currency: string }) => {
     setItems(prev => {
       // Create a unique ID that includes custom price to separate bundled items from normal ones
       const itemKey = `${product.id}-${variation?.id || 'default'}-${customPrice || 'std'}`;
@@ -40,7 +51,23 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         newItems[idx].quantity += quantity;
         return newItems;
       }
-      return [...prev, { ...product, quantity, selectedVariation: variation, custom_price: customPrice }];
+      
+      const newItem: CartItem = { 
+          ...product, 
+          quantity, 
+          selectedVariation: variation, 
+          custom_price: customPrice 
+      };
+
+      // ATTACH SECURITY TOKEN IF BUNDLE
+      if (bundleInfo) {
+          newItem.calculation_token = bundleInfo.token;
+          newItem.calculator_product_id = bundleInfo.productId;
+          newItem.calculator_amount = bundleInfo.amount;
+          newItem.calculator_currency = bundleInfo.currency; // NEW
+      }
+
+      return [...prev, newItem];
     });
     
     // Toast message logic
@@ -49,11 +76,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const removeFromCart = (id: string) => {
-    // ID generation needs to match addToCart logic or be passed explicitly
-    // Here we filter by reconstructing key or assuming 'id' passed is the compound key?
-    // To be safe, we'll assume the UI passes the exact unique key logic, 
-    // BUT current UI passes `${item.id}-${item.selectedVariation?.id || 'default'}`
-    // We need to update that to include custom_price
     setItems(prev => prev.filter(item => {
         const currentKey = `${item.id}-${item.selectedVariation?.id || 'default'}-${item.custom_price || 'std'}`;
         return currentKey !== id;

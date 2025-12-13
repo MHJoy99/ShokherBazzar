@@ -1,5 +1,5 @@
 
-import { Product, Category, Order, User, OrderNote, Coupon } from '../types';
+import { Product, Category, Order, User, OrderNote, Coupon, CalculatorInfo } from '../types';
 import { config } from '../config';
 
 // UPDATED BACKEND DOMAINS
@@ -80,7 +80,10 @@ const mapWooProduct = (p: any): Product => ({
   type: p.type,
   attributes: p.attributes || [],
   variations: [],
-  featured: p.featured || false
+  featured: p.featured || false,
+  // NEW: Read exchange rate and profit margin from backend if available
+  exchange_rate: p.exchange_rate ? parseFloat(p.exchange_rate) : undefined,
+  profit_margin: p.profit_margin ? parseFloat(p.profit_margin) : undefined, // NEW
 });
 
 export const api = {
@@ -222,6 +225,44 @@ export const api = {
       } catch (e) { return null; }
   },
 
+  // NEW: FETCH OFFICIAL EXCHANGE RATE FROM BACKEND
+  getCalculatorInfo: async (productId: number): Promise<CalculatorInfo | null> => {
+      try {
+          const response = await fetch(`${CUSTOM_API_URL}/product-calculator-info/${productId}`, {
+              headers: { 'Content-Type': 'application/json' }
+          });
+          if (!response.ok) return null;
+          return await response.json();
+      } catch (e) {
+          console.warn("Could not fetch calculator info", e);
+          return null;
+      }
+  },
+
+  // UPDATED: SECURE CALCULATOR LOGIC with Currency Support
+  calculateBundle: async (productId: number, amount: number, currency: string = 'USD'): Promise<any> => {
+      try {
+          const response = await fetch(`${CUSTOM_API_URL}/calculate-bundle`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                  product_id: productId, 
+                  amount,
+                  currency // Send currency so backend handles conversion (Priority 2)
+              })
+          });
+          
+          if (!response.ok) {
+              const err = await response.json();
+              return { success: false, message: err.message || 'Calculation failed' };
+          }
+          return await response.json();
+      } catch (e) {
+          console.error("Calculator Error:", e);
+          return { success: false, message: "Network error connecting to calculator." };
+      }
+  },
+
   createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string; guest_token?: string }> => {
     console.group("📦 ORDER CREATION");
     
@@ -230,6 +271,9 @@ export const api = {
     let totalStandardPrice = 0;
     let totalCustomPrice = 0;
 
+    // SECURITY: NEW MULTI-TOKEN SUPPORT
+    // Tokens are now attached per line-item in the meta_data, not at the root.
+    
     const line_items = orderData.items.map((item: any) => {
         let standardUnitPrice = 0;
         if (item.selectedVariation) {
@@ -251,17 +295,47 @@ export const api = {
             quantity: item.quantity
         };
 
+        // Initialize meta_data array
+        const meta_data: any[] = [];
+
         if (item.selectedVariation && item.selectedVariation.id) {
             lineItemPayload.variation_id = Number(item.selectedVariation.id);
-            lineItemPayload.meta_data = [{ 
+            meta_data.push({ 
                 key: 'Selected Option', 
                 value: `${item.selectedVariation.name} (ID: ${item.selectedVariation.id})` 
-            }];
+            });
         }
 
         if (item.custom_price) {
-            if(!lineItemPayload.meta_data) lineItemPayload.meta_data = [];
-            lineItemPayload.meta_data.push({ key: 'Bundle Promo', value: 'Active' });
+            meta_data.push({ key: 'Bundle Promo', value: 'Active' });
+            
+            // ✅ NEW: ATTACH TOKEN PER ITEM
+            // This supports multiple bundles (e.g. Steam Bundle + Razer Bundle) in one cart
+            if (item.calculation_token) {
+                meta_data.push({ 
+                    key: '_calculation_token', 
+                    value: item.calculation_token 
+                });
+                
+                if (item.calculator_currency) {
+                    meta_data.push({ 
+                        key: '_calculator_currency', 
+                        value: item.calculator_currency 
+                    });
+                }
+                
+                // Optional: Store original amount requested for admin reference
+                if (item.calculator_amount) {
+                    meta_data.push({
+                        key: '_calculator_amount',
+                        value: item.calculator_amount.toString()
+                    });
+                }
+            }
+        }
+        
+        if (meta_data.length > 0) {
+            lineItemPayload.meta_data = meta_data;
         }
 
         return lineItemPayload;
@@ -287,11 +361,11 @@ export const api = {
     const payment_method_id = orderData.payment_method === 'manual' ? 'bacs' : 'uddoktapay';
     const coupon_lines = orderData.coupon_code ? [{ code: orderData.coupon_code }] : [];
 
-    const payload = {
+    const payload: any = {
         payment_method: payment_method_id,
         customer_id: orderData.customer_id || 0,
         billing: orderData.billing,
-        line_items,
+        line_items, // Now contains tokens in meta_data
         fee_lines, 
         coupon_lines,
         meta_data,
@@ -299,6 +373,7 @@ export const api = {
         senderNumber: orderData.senderNumber, 
         customer_note: orderData.payment_method === 'manual' ? `TrxID: ${orderData.trxId}` : "Headless Order"
     };
+
     console.groupEnd();
 
     try {

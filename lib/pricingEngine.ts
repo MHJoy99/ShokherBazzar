@@ -20,29 +20,37 @@ export interface CalcResult {
 }
 
 // THE "TWIN ENGINE" LOGIC
-// Copy this logic logic to your WordPress PHP backend to enforce security.
+// MATCHING BACKEND FORMULA: Price = (USD * Rate) + Fixed_Profit
 export const calculateBundlePrice = (
     items: CalcOption[], 
     totalDenom: number, 
     rawTarget: number, 
-    currency: string
+    currency: string,
+    exchangeRate?: number,
+    profitMargin?: number // NEW: Product-specific Fixed Profit
 ): CalcResult => {
     
-    // 1. Calculate Standard Store Price (Sum of cards)
+    // 1. Calculate Standard Store Price (Sum of individual variations as listed in WC)
+    // This typically already includes profit if loaded from backend, but we recalc to be sure.
     const totalPrice = items.reduce((sum, i) => sum + i.price, 0); 
     
-    // 2. FIXED PROFIT MARGIN LOGIC (Controlled via config.ts)
-    // Base Rate = 132 BDT per 1 USD (or whatever is in config)
-    const { baseRate, profitTier1, profitTier2, profitTierThreshold } = config.pricing;
+    // 2. FIXED PROFIT LOGIC
+    const { baseRate, defaultProfit } = config.pricing;
     
-    const flatProfit = totalDenom < profitTierThreshold ? profitTier1 : profitTier2;
-    
-    // New Bundle Price Calculation
-    let calculatedBundlePrice = (totalDenom * baseRate) + flatProfit;
-    calculatedBundlePrice = Math.ceil(calculatedBundlePrice); // Round up to nearest integer
+    // USE PRODUCT SPECIFIC RATE AND PROFIT IF AVAILABLE
+    const rateToUse = exchangeRate && exchangeRate > 0 ? exchangeRate : baseRate;
+    const profitToUse = profitMargin !== undefined && profitMargin >= 0 ? profitMargin : defaultProfit;
 
-    // 3. Safety Check: If Store Price is cheaper than our formula (rare), use Store Price.
-    // This prevents user from paying MORE than buying individually.
+    // FORMULA: (Total USD * Rate) + Fixed Profit
+    // Note: If you have multiple items (e.g. 10 + 2), the backend would technically charge Profit on EACH item.
+    // However, for a "Bundle" calculator, we often want to show a competitive "Single Transaction" price.
+    // If you want STRICT strict matching of "Buying 2 cards", you should add profit * items.length.
+    // Given the request to match the "1700" example which was for a single card, this formula works.
+    
+    let calculatedBundlePrice = (totalDenom * rateToUse) + profitToUse;
+    calculatedBundlePrice = Math.ceil(calculatedBundlePrice); 
+
+    // 3. Safety Check: If sum of individual cards is cheaper (rare), use that.
     const finalPrice = Math.min(totalPrice, calculatedBundlePrice);
     
     const savings = Math.max(0, totalPrice - finalPrice);
