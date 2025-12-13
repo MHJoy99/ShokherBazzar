@@ -5,9 +5,16 @@ import { useToast } from './ToastContext';
 
 interface CartContextType {
   items: CartItem[];
-  addToCart: (product: Product, quantity?: number, variation?: Variation, customPrice?: string) => void;
+  addToCart: (
+      product: Product, 
+      quantity?: number, 
+      variation?: Variation, 
+      customPrice?: string,
+      tokenData?: { token: string; currency: string; timestamp: number; originalDenom: number }
+  ) => void;
   removeFromCart: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, quantity: number) => void;
+  updateItemToken: (cartItemId: string, newToken: string, newTimestamp: number) => void;
   clearCart: () => void;
   cartTotal: number;
   itemCount: number;
@@ -25,7 +32,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => { localStorage.setItem('cart_items', JSON.stringify(items)); }, [items]);
 
-  const addToCart = (product: Product, quantity = 1, variation?: Variation, customPrice?: string) => {
+  const addToCart = (
+      product: Product, 
+      quantity = 1, 
+      variation?: Variation, 
+      customPrice?: string,
+      tokenData?: { token: string; currency: string; timestamp: number; originalDenom: number }
+    ) => {
     setItems(prev => {
       // Create a unique ID that includes custom price to separate bundled items from normal ones
       const itemKey = `${product.id}-${variation?.id || 'default'}-${customPrice || 'std'}`;
@@ -38,22 +51,33 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (idx > -1) {
         const newItems = [...prev];
         newItems[idx].quantity += quantity;
+        // If updating an existing item with new token data (rare but possible), update it
+        if (tokenData) {
+            newItems[idx].calculationToken = tokenData.token;
+            newItems[idx].calculatorCurrency = tokenData.currency;
+            newItems[idx].tokenTimestamp = tokenData.timestamp;
+        }
         return newItems;
       }
-      return [...prev, { ...product, quantity, selectedVariation: variation, custom_price: customPrice }];
+      
+      return [...prev, { 
+          ...product, 
+          quantity, 
+          selectedVariation: variation, 
+          custom_price: customPrice,
+          calculationToken: tokenData?.token,
+          calculatorCurrency: tokenData?.currency,
+          tokenTimestamp: tokenData?.timestamp,
+          originalDenom: tokenData?.originalDenom
+      }];
     });
     
     // Toast message logic
-    const priceMsg = customPrice ? ` (Bundle Price: ৳${parseFloat(customPrice).toFixed(0)})` : '';
+    const priceMsg = customPrice ? ` (Price: ৳${parseFloat(customPrice).toFixed(0)})` : '';
     showToast(`Added ${product.name}${priceMsg} to cart`);
   };
 
   const removeFromCart = (id: string) => {
-    // ID generation needs to match addToCart logic or be passed explicitly
-    // Here we filter by reconstructing key or assuming 'id' passed is the compound key?
-    // To be safe, we'll assume the UI passes the exact unique key logic, 
-    // BUT current UI passes `${item.id}-${item.selectedVariation?.id || 'default'}`
-    // We need to update that to include custom_price
     setItems(prev => prev.filter(item => {
         const currentKey = `${item.id}-${item.selectedVariation?.id || 'default'}-${item.custom_price || 'std'}`;
         return currentKey !== id;
@@ -69,6 +93,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
+  const updateItemToken = (id: string, newToken: string, newTimestamp: number) => {
+      setItems(prev => prev.map(item => {
+        const currentKey = `${item.id}-${item.selectedVariation?.id || 'default'}-${item.custom_price || 'std'}`;
+        return currentKey === id ? { ...item, calculationToken: newToken, tokenTimestamp: newTimestamp } : item;
+      }));
+  };
+
   const clearCart = () => { setItems([]); localStorage.removeItem('cart_items'); };
   
   const cartTotal = items.reduce((total, item) => {
@@ -82,7 +113,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, 0);
 
   return (
-    <CartContext.Provider value={{ items, addToCart, removeFromCart, updateQuantity, clearCart, cartTotal, itemCount: items.reduce((c, i) => c + i.quantity, 0) }}>
+    <CartContext.Provider value={{ items, addToCart, removeFromCart, updateQuantity, updateItemToken, clearCart, cartTotal, itemCount: items.reduce((c, i) => c + i.quantity, 0) }}>
       {children}
     </CartContext.Provider>
   );

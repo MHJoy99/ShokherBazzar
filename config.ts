@@ -8,7 +8,7 @@ export const config = {
     pricing: {
         baseRate: 135,       // Default Rate (Updated to your preference)
         profitMarginPercent: 1, // 1% Margin
-        // Legacy fields removed to prevent confusion
+        giftCardProductId: 9042 // ID of the Gift Card Product for Secure Token Calculation
     },
 
     payment: {

@@ -12,7 +12,7 @@ import { Coupon } from '../types';
 import { TrustPilotWidget } from '../components/TrustPilotWidget'; // Import Widget
 
 export const Cart: React.FC = () => {
-  const { items, removeFromCart, updateQuantity, cartTotal, clearCart } = useCart();
+  const { items, removeFromCart, updateQuantity, cartTotal, clearCart, updateItemToken } = useCart();
   const { user, register } = useAuth();
   const { showToast } = useToast();
   const [step, setStep] = useState(1); 
@@ -103,12 +103,58 @@ export const Cart: React.FC = () => {
   const finalTotal = Math.max(0, cartTotal - discountAmount);
   const isFreeOrder = finalTotal === 0;
 
+  // SECURITY: RE-VALIDATE TOKENS BEFORE CHECKOUT
+  const validateAndRefreshToken = async () => {
+    const MAX_AGE = 55 * 60 * 1000; // 55 minutes
+    const now = Date.now();
+    let hasError = false;
+
+    for (const item of items) {
+        // Only check Gift Cards (Product 9042)
+        if (item.id === config.pricing.giftCardProductId && item.calculationToken && item.tokenTimestamp) {
+            const age = now - item.tokenTimestamp;
+            
+            // If token expired OR if quantity changed (token qty != item qty) 
+            // NOTE: Simple check here is age. Quantity changes usually imply user refreshed via Add To Cart.
+            // But if user modified qty in cart (if enabled), we must recalc.
+            
+            if (age > MAX_AGE) {
+                try {
+                    // Regenerate token using original denomination logic
+                    const totalAmount = (item.originalDenom || 0) * item.quantity;
+                    if(totalAmount <= 0) continue; 
+                    
+                    const data = await api.calculateBundle(item.id, totalAmount, item.calculatorCurrency || 'USD');
+                    
+                    // Update Token
+                    updateItemToken(
+                        `${item.id}-${item.selectedVariation?.id || 'default'}-${item.custom_price || 'std'}`,
+                        data.calculationToken,
+                        Date.now()
+                    );
+                } catch (e) {
+                    hasError = true;
+                }
+            }
+        }
+    }
+    return !hasError;
+  };
+
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setPaymentError(false);
     setSecurityError('');
     
+    // 1. Validate Tokens
+    const tokensValid = await validateAndRefreshToken();
+    if (!tokensValid) {
+        setSecurityError("Security token expired or validation failed. Please refresh your cart items.");
+        setLoading(false);
+        return;
+    }
+
     try {
         let customerId = user?.id;
 
@@ -157,10 +203,10 @@ export const Cart: React.FC = () => {
     } catch (error: any) { 
         // Display precise error from backend if available
         const errMsg = error.message || "Order creation failed.";
-        if (errMsg.includes("Security Check") || errMsg.includes("Discount amount")) {
+        if (errMsg.includes("Security") || errMsg.includes("token") || errMsg.includes("mismatch")) {
             setSecurityError(errMsg);
         } else {
-            alert("Order failed. Please try again.");
+            alert("Order failed: " + errMsg);
         }
     } finally { 
         setLoading(false); 
@@ -237,10 +283,10 @@ export const Cart: React.FC = () => {
                    <p className="text-gray-400 mb-6 text-sm">
                        {securityError}
                        <br/><br/>
-                       The system detected a pricing discrepancy. Please refresh your cart and try again.
+                       This helps prevent price manipulation. Please refresh your cart.
                    </p>
-                   <button onClick={() => setSecurityError('')} className="w-full bg-gray-700 text-white font-bold uppercase py-3 rounded-xl hover:bg-gray-600">
-                       Dismiss
+                   <button onClick={() => { setSecurityError(''); clearCart(); }} className="w-full bg-gray-700 text-white font-bold uppercase py-3 rounded-xl hover:bg-gray-600">
+                       Clear Cart & Retry
                    </button>
                </div>
           </div>
@@ -304,6 +350,13 @@ export const Cart: React.FC = () => {
                                         {item.name} {item.selectedVariation ? `- ${item.selectedVariation.name}` : ''}
                                     </h3>
                                     <div className="text-primary text-xs font-bold mt-1">৳{parseFloat(price).toFixed(2)}</div>
+                                    
+                                    {/* Security Badge */}
+                                    {item.calculationToken && (
+                                        <div className="mt-1 inline-flex items-center gap-1 bg-green-500/10 text-green-500 px-2 py-0.5 rounded text-[9px] font-bold border border-green-500/20">
+                                            <i className="fas fa-lock"></i> Secure Price
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="flex items-center bg-dark-950 rounded border border-white/10"><button onClick={() => updateQuantity(key, item.quantity - 1)} className="w-8 h-8 text-gray-400 hover:text-white">-</button><span className="w-8 text-center text-white text-xs font-bold">{item.quantity}</span><button onClick={() => updateQuantity(key, item.quantity + 1)} className="w-8 h-8 text-gray-400 hover:text-white">+</button></div>
                                 <div className="text-right min-w-[80px]"><span className="block text-lg font-black text-white">৳{(parseFloat(price) * item.quantity).toFixed(0)}</span></div>

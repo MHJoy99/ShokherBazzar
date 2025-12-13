@@ -230,25 +230,54 @@ export const api = {
       } catch (e) { return null; }
   },
 
+  // SECURITY: SECURE BUNDLE CALCULATION
+  calculateBundle: async (productId: number, amount: number, currency: string) => {
+      try {
+          const response = await fetch(`${CUSTOM_API_URL}/calculate-bundle`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ productId, amount, currency })
+          });
+          
+          if (!response.ok) {
+              const err = await response.json();
+              throw new Error(err.message || 'Bundle calculation failed');
+          }
+          return response.json();
+      } catch (error) {
+          throw error;
+      }
+  },
+
   createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string; guest_token?: string }> => {
-    // ... (logic handled by backend) ...
-    // Note: The 'custom_price' field we send will be validated by the new backend plugin logic in future steps.
-    
-    // Construct simplified payload for custom endpoint
+    // Construct line items with Security Tokens if present
     const line_items = orderData.items.map((item: any) => {
         const payload: any = {
             product_id: item.id,
             quantity: item.quantity
         };
+        
         if (item.selectedVariation) {
             payload.variation_id = Number(item.selectedVariation.id);
         }
-        if (item.custom_price) {
-            // WE SEND THE CUSTOM PRICE HERE
-            // The backend MUST validate this using the same formula (Rate * Denom + Profit)
+
+        // SECURITY: Attach Token if this is a Gift Card (Product 9042)
+        if (item.id === config.pricing.giftCardProductId && item.calculationToken) {
+            payload.meta_data = [
+                { key: '_calculation_token', value: item.calculationToken },
+                { key: '_calculator_currency', value: item.calculatorCurrency || 'USD' }
+            ];
+            // Override price if bundle logic requires it, but usually standard flow respects variation price.
+            // However, custom bundles might use the calculated bundle price.
+            if (item.custom_price) {
+                 payload.total = item.custom_price;
+            }
+        } else if (item.custom_price) {
+            // Legacy bundle logic for non-secure items (if any)
             payload.total = item.custom_price; 
             payload.meta_data = [{ key: 'Bundle Promo', value: 'Active' }];
         }
+        
         return payload;
     });
 
@@ -282,6 +311,7 @@ export const api = {
             return baseResult;
         } else {
             const err = await response.json();
+            // Pass the 403 Security Message to frontend
             throw new Error(err.message || 'Order creation failed');
         }
     } catch (proxyError: any) {

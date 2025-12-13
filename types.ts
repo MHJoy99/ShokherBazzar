@@ -45,6 +45,12 @@ export interface CartItem extends Product {
   quantity: number;
   selectedVariation?: Variation;
   custom_price?: string; // For bundle pricing overrides
+  
+  // SECURITY TOKEN FIELDS FOR GIFT CARDS
+  calculationToken?: string;
+  calculatorCurrency?: string;
+  tokenTimestamp?: number;
+  originalDenom?: number; // Stores the face value (e.g. 10 for $10) to help regeneration
 }
 
 export interface Category {

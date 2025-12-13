@@ -10,7 +10,6 @@ import { Helmet } from 'react-helmet-async';
 import { config } from '../config';
 import { SkeletonCard } from '../components/Skeleton';
 import { ProductCard } from '../components/ProductCard';
-import { calculateBundlePrice, CalcResult, CalcOption } from '../lib/pricingEngine';
 
 // --- CONFIG: SUPPORTED CURRENCIES & FALLBACK RATES ---
 const CURRENCY_MAP: Record<string, { label: string; flag: string; fallback: number }> = {
@@ -24,60 +23,17 @@ const CURRENCY_MAP: Record<string, { label: string; flag: string; fallback: numb
     PLN: { label: "PLN", flag: "🇵🇱", fallback: 3.96 },  // Poland
 };
 
+// SECURE GIFT CARD CALCULATOR USING BACKEND API
 const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }> = ({ variations, product }) => {
     const [target, setTarget] = useState<string>('');
     const [selectedCurrency, setSelectedCurrency] = useState('USD');
-    const [conversionRates, setConversionRates] = useState<Record<string, number>>({});
-    const [ratesLoaded, setRatesLoaded] = useState(false);
-    
-    const [result, setResult] = useState<CalcResult | null>(null);
+    const [result, setResult] = useState<any | null>(null);
+    const [loadingCalc, setLoadingCalc] = useState(false);
     const [error, setError] = useState('');
     const { addToCart } = useCart();
     const { showToast } = useToast();
 
-    // 0. Init Rates (Prioritize Live, Fallback to Hardcoded)
-    useEffect(() => {
-        // 1. Set Fallbacks immediately to prevent UI lag
-        const initial: Record<string, number> = {};
-        Object.entries(CURRENCY_MAP).forEach(([key, val]) => initial[key] = val.fallback);
-        setConversionRates(initial);
-
-        // 2. Attempt Live Fetch
-        const fetchRates = async () => {
-            try {
-                const res = await fetch('https://api.frankfurter.app/latest?from=USD');
-                if (!res.ok) throw new Error("Rate API failed");
-                const data = await res.json();
-                
-                if (data && data.rates) {
-                    setConversionRates(prev => ({ ...prev, ...data.rates }));
-                    setRatesLoaded(true);
-                }
-            } catch (e) {
-                console.warn("Currency API offline, using fallback rates.");
-                // Fallback rates already set, so we just do nothing
-            }
-        };
-
-        fetchRates();
-    }, []);
-
-    // 1. Parse Variations into usable numbers
-    const options: CalcOption[] = useMemo(() => {
-        return variations.map(v => {
-            // SAFE MATCH: Ensure we don't crash if name has no numbers
-            const match = v.name.match(/(\d+(\.\d+)?)/);
-            const attrDenom = product.attributes?.find(a => a.name === 'pa_denomination')?.options.find(opt => v.name.includes(opt));
-            
-            let denom = match ? parseFloat(match[0]) : 0;
-            if (denom === 0 && attrDenom) denom = parseFloat(attrDenom);
-            
-            const price = parseFloat(v.price);
-            return (denom > 0 && price > 0) ? { denom, price, variation: v } : null;
-        }).filter(Boolean) as CalcOption[];
-    }, [variations, product]);
-
-    const handleCalculate = () => {
+    const handleCalculate = async () => {
         const rawVal = parseFloat(target);
         if (!rawVal || rawVal <= 0) {
             setError("Enter a valid amount.");
@@ -85,117 +41,52 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
             return;
         }
         setError('');
+        setLoadingCalc(true);
 
-        // CONVERSION LOGIC
-        const exchangeRate = conversionRates[selectedCurrency] || 1;
-        // If USD, target is direct. If other, convert Local -> USD
-        const targetUSD = selectedCurrency === 'USD' ? rawVal : (rawVal / exchangeRate);
-
-        // COMBINATORICS LOGIC (Finding the cards)
-        function findBestSingle(t: number) {
-            let best = null, bestDiff = Infinity;
-            options.forEach(opt => {
-                const diff = Math.abs(opt.denom - t);
-                if (diff < bestDiff) { bestDiff = diff; best = opt; }
+        try {
+            // SECURE CALL TO BACKEND
+            const data = await api.calculateBundle(product.id, rawVal, selectedCurrency);
+            
+            setResult({
+                items: data.items, // Backend returns array of items with variationId, quantity, subtotalBDT
+                totalBDT: data.totalBDT,
+                calculationToken: data.calculationToken,
+                currency: data.currency,
+                requestedAmount: data.requestedAmount
             });
-            return best ? { items: [best], total: best.denom } : null;
-        }
-
-        function findBestPair(t: number) {
-            let bestPair = null, bestDiff = Infinity;
-            for (let i = 0; i < options.length; i++) {
-                for (let j = i; j < options.length; j++) {
-                    const sum = options[i].denom + options[j].denom;
-                    const diff = Math.abs(sum - t);
-                    if (diff < bestDiff) { bestDiff = diff; bestPair = [options[i], options[j]]; }
-                }
-            }
-            return bestPair ? { items: bestPair, total: bestPair.reduce((s,i)=>s+i.denom,0) } : null;
-        }
-
-        function findBestTriple(t: number) {
-            let bestTriple = null, bestDiff = Infinity;
-            for (let i = 0; i < options.length; i++) {
-                for (let j = i; j < options.length; j++) {
-                    for (let k = j; k < options.length; k++) {
-                        const sum = options[i].denom + options[j].denom + options[k].denom;
-                        const diff = Math.abs(sum - t);
-                        if (diff < bestDiff) { bestDiff = diff; bestTriple = [options[i], options[j], options[k]]; }
-                    }
-                }
-            }
-            return bestTriple ? { items: bestTriple, total: bestTriple.reduce((s,i)=>s+i.denom,0) } : null;
-        }
-
-        function findBestQuad(t: number) {
-            let bestQuad = null, bestDiff = Infinity;
-            if(options.length > 25) return null; // Performance brake
-            for (let i = 0; i < options.length; i++) {
-                for (let j = i; j < options.length; j++) {
-                    for (let k = j; k < options.length; k++) {
-                        for (let m = k; m < options.length; m++) {
-                            const sum = options[i].denom + options[j].denom + options[k].denom + options[m].denom;
-                            const diff = Math.abs(sum - t);
-                            if (diff < bestDiff) { bestDiff = diff; bestQuad = [options[i], options[j], options[k], options[m]]; }
-                        }
-                    }
-                }
-            }
-            return bestQuad ? { items: bestQuad, total: bestQuad.reduce((s,i)=>s+i.denom,0) } : null;
-        }
-
-        const bestSingle = findBestSingle(targetUSD);
-        const bestPair = findBestPair(targetUSD);
-        const bestTriple = findBestTriple(targetUSD);
-        const bestQuad = findBestQuad(targetUSD);
-
-        const candidates = [];
-        if (bestSingle) candidates.push(bestSingle);
-        if (bestPair) candidates.push(bestPair);
-        if (bestTriple) candidates.push(bestTriple);
-        if (bestQuad) candidates.push(bestQuad);
-
-        // Priority: Over20 -> Over -> Under
-        let over20 = null, over = null, under = null;
-        
-        candidates.forEach(c => {
-            const t = c.total;
-            if (t >= targetUSD + 0.20) {
-                if (!over20 || t < over20.total) over20 = c;
-            } else if (t >= targetUSD) {
-                if (!over || t < over.total) over = c;
-            } else {
-                if (!under || Math.abs(targetUSD - t) < Math.abs(targetUSD - under.total)) under = c;
-            }
-        });
-
-        const chosen = over20 || over || under;
-
-        if (chosen) {
-            // DELEGATE PRICING TO ENGINE, PASSING PRODUCT SPECIFIC EXCHANGE RATE
-            const calculation = calculateBundlePrice(
-                chosen.items, 
-                chosen.total, 
-                rawVal, 
-                selectedCurrency,
-                product.exchange_rate // Pass the rate from WP Plugin
-            );
-            setResult(calculation);
-        } else {
-            setError("No combination found.");
+        } catch (e: any) {
+            setError(e.message || "Calculation failed");
+            setResult(null);
+        } finally {
+            setLoadingCalc(false);
         }
     };
 
     const handleAddBundle = () => {
         if(!result) return;
-        result.items.forEach(item => {
-            const customPrice = (item.denom / result.totalDenom) * result.bundlePrice;
-            addToCart(product, 1, item.variation, customPrice.toString());
+        
+        // Add items to cart with Security Token
+        result.items.forEach((item: any) => {
+            // Find variation object to pass full data
+            const variation = variations.find(v => v.id === item.variationId);
+            
+            addToCart(
+                product, 
+                item.quantity, 
+                variation, 
+                item.subtotalBDT.toString(), // Custom Price from Backend
+                {
+                    token: result.calculationToken,
+                    currency: result.currency,
+                    timestamp: Date.now(),
+                    originalDenom: item.denomination
+                }
+            );
         });
-        showToast(`Added ${result.items.length} items to cart!`, 'success');
+        showToast(`Added items to cart securely!`, 'success');
+        setResult(null);
+        setTarget('');
     };
-
-    if (options.length === 0) return null;
 
     return (
         <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 rounded-2xl p-6 mb-8 relative overflow-hidden shadow-2xl">
@@ -207,12 +98,11 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                 <i className="fas fa-magic text-yellow-400"></i> Smart Calculator
             </h3>
             <p className="text-gray-300 text-sm mb-6 max-w-lg">
-                Enter amount in <span className="text-white font-bold">ANY Currency</span>. We'll find the best USD card combo for your region!
+                Enter amount in <span className="text-white font-bold">ANY Currency</span>. Our secure system will calculate the best bundle.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-4">
                 <div className="relative flex-1 w-full sm:w-auto flex gap-2">
-                    
                     {/* CURRENCY SELECTOR */}
                     <div className="relative min-w-[110px]">
                          <select 
@@ -242,22 +132,12 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                 </div>
                 <button 
                     onClick={handleCalculate}
-                    className="bg-primary hover:bg-primary-hover text-black font-black uppercase px-6 py-3 rounded-xl shadow-glow transition-transform active:scale-95 w-full sm:w-auto"
+                    disabled={loadingCalc}
+                    className="bg-primary hover:bg-primary-hover text-black font-black uppercase px-6 py-3 rounded-xl shadow-glow transition-transform active:scale-95 w-full sm:w-auto disabled:opacity-50"
                 >
-                    Calculate
+                    {loadingCalc ? 'Calculating...' : 'Calculate'}
                 </button>
             </div>
-
-            {/* LIVE RATE INDICATOR */}
-            {selectedCurrency !== 'USD' && conversionRates[selectedCurrency] && (
-                <div className="flex items-center gap-2 mb-4">
-                     <p className="text-[10px] text-gray-400 font-mono text-center sm:text-left bg-black/20 inline-block px-2 py-1 rounded border border-white/5">
-                        <i className="fas fa-exchange-alt mr-1"></i>
-                        1 USD ≈ {conversionRates[selectedCurrency]?.toFixed(2)} {selectedCurrency}
-                     </p>
-                     {ratesLoaded && <span className="text-[10px] text-green-500 font-bold animate-pulse">● Live Rates</span>}
-                </div>
-            )}
 
             {error && <p className="text-red-400 text-sm font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20"><i className="fas fa-exclamation-circle"></i> {error}</p>}
 
@@ -265,38 +145,21 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                 <div className="bg-dark-950/80 border border-white/10 rounded-xl p-5 animate-fade-in-up shadow-2xl">
                      <div className="flex justify-between items-start mb-4 border-b border-white/5 pb-4">
                          <div>
-                             <p className="text-gray-400 text-xs uppercase font-bold">You Get (Approx)</p>
-                             <p className="text-white font-bold text-lg mb-1">
-                                 {result.currency === 'USD' ? (
-                                     `$${result.totalDenom.toFixed(2)} USD`
-                                 ) : (
-                                     `${(result.totalDenom * (conversionRates[result.currency] || 1)).toFixed(0)} ${result.currency}`
-                                 )}
-                             </p>
+                             <p className="text-gray-400 text-xs uppercase font-bold">We will send you:</p>
                              
-                             <div className="flex flex-wrap gap-2 mt-2">
-                                 {result.items.map((item, idx) => (
-                                     <span key={idx} className="bg-white/10 text-white font-mono font-bold px-2 py-1 rounded text-xs border border-white/10 flex items-center gap-1">
-                                         <span className="text-[9px] text-gray-500">$</span>{item.denom}
+                             <div className="flex flex-col gap-2 mt-2">
+                                 {result.items.map((item: any, idx: number) => (
+                                     <span key={idx} className="text-white font-mono font-bold text-sm flex items-center gap-2">
+                                         <span className="bg-white/10 px-2 py-0.5 rounded text-xs">x{item.quantity}</span>
+                                         {item.name}
                                      </span>
                                  ))}
                              </div>
-                             
-                             {result.currency !== 'USD' && (
-                                <p className="text-gray-500 text-[10px] mt-2 italic">Actual Steam conversion may vary slightly.</p>
-                             )}
+                             <p className="text-gray-500 text-[10px] mt-2 italic"><i className="fas fa-shield-alt text-green-500"></i> Secure Price Verified</p>
                          </div>
                          <div className="text-right">
                              <p className="text-gray-400 text-xs uppercase font-bold">Your Price</p>
-                             {result.savings > 0 && (
-                                 <p className="text-xs text-red-400 line-through font-mono">৳{result.totalPrice.toFixed(0)}</p>
-                             )}
-                             <p className="text-2xl font-black text-primary">৳{result.bundlePrice.toFixed(0)}</p>
-                             {result.savings > 0 && (
-                                 <span className="bg-green-500 text-black text-[10px] font-black px-2 py-0.5 rounded uppercase inline-block mt-1 animate-pulse">
-                                     Save ৳{result.savings.toFixed(0)}
-                                 </span>
-                             )}
+                             <p className="text-2xl font-black text-primary">৳{result.totalBDT}</p>
                          </div>
                      </div>
                      <button 
@@ -328,9 +191,12 @@ export const ProductDetail: React.FC = () => {
   const [loadingMain, setLoadingMain] = useState(!preload); 
   const [loadingRelated, setLoadingRelated] = useState(true);
 
+  // Interaction State
   const [selectedVariation, setSelectedVariation] = useState<Variation | null>(null);
   const [qty, setQty] = useState(1);
   const [activeTab, setActiveTab] = useState<'desc' | 'redeem' | 'specs'>('desc');
+  const [isProcessingGiftCard, setIsProcessingGiftCard] = useState(false); // New Loading State
+  
   const { addToCart } = useCart();
   const { showToast } = useToast();
 
@@ -348,10 +214,8 @@ export const ProductDetail: React.FC = () => {
 
       const data = await api.getProduct(slug);
       
-      // Update product with full details (including variations)
       if (data) {
           setProduct(data);
-          // Auto-select first variation if available
           if (data.variations && data.variations.length > 0) {
               setSelectedVariation(data.variations[0]);
           }
@@ -361,7 +225,7 @@ export const ProductDetail: React.FC = () => {
 
       if (data) {
             try {
-                // Related Cards
+                // Related Cards Logic
                 let related: Product[] = [];
                 if (data.cross_sell_ids && data.cross_sell_ids.length > 0) {
                      related = await api.getProductsByIds(data.cross_sell_ids);
@@ -372,7 +236,7 @@ export const ProductDetail: React.FC = () => {
                 }
                 setRelatedProducts(related);
 
-                // Suggested Products
+                // Suggested Products Logic
                 let suggestions = related.length > 4 ? related.slice(4, 8) : [];
                 if (suggestions.length < 4) {
                     const generic = await api.getProducts('all'); 
@@ -395,11 +259,10 @@ export const ProductDetail: React.FC = () => {
   if (!product) return <div className="min-h-screen flex items-center justify-center text-white">Product not found</div>;
 
   const isVariable = product.type === 'variable' || (product.variations && product.variations.length > 0);
-  // Check if variations are actually loaded
   const variationsLoaded = product.variations && product.variations.length > 0;
   
-  // DETECT IF THIS IS A GIFT CARD (for calculator)
-  const isGiftCard = isVariable && variationsLoaded && product.variations!.some(v => /\d/.test(v.name));
+  // SECURE GIFT CARD CHECK
+  const isGiftCardProduct = product.id === config.pricing.giftCardProductId;
 
   // Price Calculation logic
   let displayPrice = "0";
@@ -416,6 +279,72 @@ export const ProductDetail: React.FC = () => {
   const totalPrice = (parseFloat(displayPrice) * qty).toFixed(0);
   const hasDisclaimer = product.short_description && product.short_description.trim().length > 0;
   const editionName = product.attributes?.find(a => a.name === 'Edition')?.options[0] || product.name;
+
+  // SECURE BUY HANDLER FOR GIFT CARDS
+  const handleSecureBuy = async (redirect: boolean) => {
+      if (isVariable && !selectedVariation) {
+          showToast("Please select a package first", "error");
+          return;
+      }
+      
+      // If NOT gift card, standard flow
+      if (!isGiftCardProduct) {
+          addToCart(product, qty, selectedVariation || undefined);
+          if (redirect) navigate('/cart');
+          return;
+      }
+
+      // GIFT CARD FLOW
+      if (!selectedVariation) return;
+      setIsProcessingGiftCard(true);
+      
+      try {
+          // 1. Get Denomination (Try parsing from name, fallback to attribute)
+          let denom = 0;
+          const match = selectedVariation.name.match(/(\d+(\.\d+)?)/);
+          if (match) denom = parseFloat(match[0]);
+          
+          if (denom === 0) throw new Error("Could not determine card value");
+
+          // 2. Calculate Token for this specific variation & quantity
+          // NOTE: Backend logic says "User adds 2x $10 -> Token generated for quantity: 2".
+          // So we must calculate based on total amount (Denom * Qty).
+          const totalAmount = denom * qty;
+          
+          const data = await api.calculateBundle(product.id, totalAmount, 'USD'); // Assuming USD for standard vars
+          
+          // 3. Add to cart with token
+          // Since the backend calculator returns a breakdown, we add THOSE items.
+          // Usually for "2x $10", it should return items: [{ name: "Steam $10", quantity: 2 }]
+          
+          data.items.forEach((item: any) => {
+               // We need to match the variation from our local list to the one returned
+               // Or just use the selectedVariation if IDs match
+               const matchedVar = product.variations?.find(v => v.id === item.variationId) || selectedVariation;
+               
+               addToCart(
+                   product,
+                   item.quantity,
+                   matchedVar,
+                   item.subtotalBDT.toString(),
+                   {
+                       token: data.calculationToken,
+                       currency: data.currency,
+                       timestamp: Date.now(),
+                       originalDenom: item.denomination
+                   }
+               );
+          });
+          
+          if (redirect) navigate('/cart');
+          else showToast("Added to cart securely", "success");
+
+      } catch (err: any) {
+          showToast(`Security check failed: ${err.message}`, "error");
+      } finally {
+          setIsProcessingGiftCard(false);
+      }
+  };
 
   return (
     <div className="min-h-screen bg-transparent pb-32 pt-10">
@@ -474,8 +403,8 @@ export const ProductDetail: React.FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-8 space-y-8">
-             {/* GIFT CARD CALCULATOR - Only show if it looks like a gift card */}
-             {isGiftCard && product.variations && (
+             {/* SECURE GIFT CARD CALCULATOR - Only for Gift Card Product */}
+             {isGiftCardProduct && product.variations && (
                  <GiftCardCalculator variations={product.variations} product={product} />
              )}
              
@@ -484,7 +413,6 @@ export const ProductDetail: React.FC = () => {
                     <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-6 border-b border-white/5 pb-4">Select Denomination</h3>
                     
                     {!variationsLoaded ? (
-                         // OPTIMIZED: Specific Skeleton for variations while they load
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              {[1,2,3,4].map(i => (
                                  <div key={i} className="h-20 bg-dark-950 border border-white/5 rounded-xl animate-pulse"></div>
@@ -510,6 +438,7 @@ export const ProductDetail: React.FC = () => {
                                         </div>
                                     </div>
                                     <div className="text-right relative z-10">
+                                        {/* Standard price, but note that for gift cards we recalculate securely on click */}
                                         <div className="text-xs text-gray-500 line-through font-mono">৳{variation.regular_price || (parseFloat(variation.price) * 1.1).toFixed(0)}</div>
                                         <div className={`text-lg font-black ${isSelected ? 'text-primary' : 'text-white'}`}>৳{variation.price}</div>
                                     </div>
@@ -590,44 +519,25 @@ export const ProductDetail: React.FC = () => {
                     <div className="flex justify-between items-end mb-8 border-b border-white/5 pb-6">
                         <span className="text-gray-400 text-sm font-bold uppercase">Total Price</span>
                         <div className="text-right">
-                             {parseFloat(regularPrice) > parseFloat(displayPrice) && (
-                                 <div className="text-xs text-gray-500 line-through mb-1">৳{(parseFloat(regularPrice) * qty).toFixed(0)}</div>
-                             )}
-                             
                              {/* PRICE LOADING STATE */}
                              {!isVariable || variationsLoaded ? (
                                 <div className="text-4xl font-black text-primary tracking-tight">৳{totalPrice}</div>
                              ) : (
                                 <div className="h-10 w-32 bg-dark-950 animate-pulse rounded"></div>
                              )}
-                             
-                             <div className="text-[10px] text-gray-500 font-mono mt-1">Credits Earned: {(parseFloat(totalPrice) * 0.01).toFixed(0)}</div>
                         </div>
                     </div>
                     <div className="space-y-3">
                         <button 
-                            onClick={() => { 
-                                if (isVariable && !selectedVariation) {
-                                    showToast("Please select a package first", "error");
-                                    return;
-                                }
-                                addToCart(product, qty, selectedVariation || undefined); 
-                                navigate('/cart'); 
-                            }} 
-                            disabled={isVariable && !variationsLoaded}
+                            onClick={() => handleSecureBuy(true)} 
+                            disabled={(isVariable && !variationsLoaded) || isProcessingGiftCard}
                             className="w-full bg-primary hover:bg-primary-hover text-black font-black uppercase italic tracking-wider py-4 rounded-xl shadow-glow transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {isVariable && !variationsLoaded ? 'Loading...' : 'Buy Now'}
+                            {isProcessingGiftCard ? 'Verifying Price...' : 'Buy Now'}
                         </button>
                         <button 
-                            onClick={() => {
-                                if (isVariable && !selectedVariation) {
-                                    showToast("Please select a package first", "error");
-                                    return;
-                                }
-                                addToCart(product, qty, selectedVariation || undefined);
-                            }} 
-                            disabled={isVariable && !variationsLoaded}
+                            onClick={() => handleSecureBuy(false)} 
+                            disabled={(isVariable && !variationsLoaded) || isProcessingGiftCard}
                             className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold uppercase tracking-wider py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <i className="fas fa-cart-plus"></i> Add to Cart
@@ -645,79 +555,9 @@ export const ProductDetail: React.FC = () => {
                        <div><div className="text-white text-xs font-bold">Support</div><div className="text-[10px] text-gray-500">24/7 Live</div></div>
                    </div>
                 </div>
-
-                <div className="bg-dark-900 border border-white/5 rounded-2xl overflow-hidden shadow-xl min-h-[100px]">
-                    <div className="bg-dark-950 p-4 border-b border-white/5 flex justify-between items-center">
-                        <h4 className="text-white font-bold text-xs uppercase tracking-wider">Related Cards</h4>
-                        {product.categories[0] && (
-                            <Link to={`/category/${product.categories[0].slug}`} className="text-[10px] text-primary font-bold uppercase hover:underline">View All</Link>
-                        )}
-                    </div>
-                    
-                    {loadingRelated ? (
-                        <div className="p-4 space-y-4">{[1,2,3].map(i => <div key={i} className="h-12 bg-white/5 rounded animate-pulse"></div>)}</div>
-                    ) : relatedProducts.length > 0 ? (
-                        <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
-                            {relatedProducts.map(p => (
-                                <Link to={`/product/${p.slug}`} key={p.id} className="flex items-center gap-3 p-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 group">
-                                    <div className="w-10 h-10 rounded overflow-hidden bg-dark-950 border border-white/10 shrink-0">
-                                            <img src={p.images[0].src} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt="" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h5 className="text-white text-xs font-bold truncate group-hover:text-primary transition-colors">{p.name}</h5>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            {p.platform && <span className="text-[9px] bg-white/10 px-1 rounded text-gray-300">{p.platform}</span>}
-                                            <span className="text-[9px] text-gray-500">Global</span>
-                                        </div>
-                                    </div>
-                                    <div className="text-right"><span className="block text-primary text-xs font-bold">৳{p.price}</span></div>
-                                </Link>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="p-4 text-center text-gray-500 text-xs">No related items.</div>
-                    )}
-                </div>
              </div>
           </div>
         </div>
-
-        <div className="mt-24 border-t border-white/5 pt-12">
-            <h2 className="text-2xl font-black text-white uppercase italic tracking-wide mb-8">You Might Also Like</h2>
-            {loadingRelated ? (
-                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">{[1,2,3,4].map(i => <SkeletonCard key={i} />)}</div>
-            ) : suggestedProducts.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">{suggestedProducts.map(p => (<ProductCard key={p.id} product={p} />))}</div>
-            ) : (
-                <p className="text-gray-500">No suggestions available.</p>
-            )}
-        </div>
-      </div>
-      
-      {/* MOBILE FLOATING CTA (Replaces old sticky footer, hidden on Desktop, respects Bottom Nav) */}
-      <div className="fixed bottom-16 left-0 w-full bg-dark-900 border-t border-white/10 p-4 z-40 md:hidden flex items-center justify-between gap-4 shadow-2xl safe-area-bottom">
-          <div>
-            <p className="text-[10px] text-gray-500 uppercase font-bold">Total</p>
-            {isVariable && !variationsLoaded ? (
-                <div className="h-6 w-16 bg-white/10 animate-pulse rounded"></div>
-            ) : (
-                <p className="text-xl font-black text-white">৳{totalPrice}</p>
-            )}
-          </div>
-          <button 
-              onClick={() => { 
-                if (isVariable && !selectedVariation) {
-                    showToast("Please select a package first", "error");
-                    return;
-                }
-                addToCart(product, qty, selectedVariation || undefined); 
-                navigate('/cart'); 
-              }} 
-              disabled={isVariable && !variationsLoaded}
-              className="bg-primary text-black font-black uppercase italic py-3 px-8 rounded shadow-glow flex-1 disabled:opacity-50"
-          >
-              {isVariable && !variationsLoaded ? 'Loading...' : 'Buy Now'}
-          </button>
       </div>
     </div>
   );
