@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../lib/api'; 
@@ -7,8 +8,8 @@ import { useToast } from '../context/ToastContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { config } from '../config';
-import { SkeletonCard } from '../components/Skeleton';
 import { ProductCard } from '../components/ProductCard';
+import { SkeletonCard } from '../components/Skeleton';
 
 // --- CONFIG: SUPPORTED CURRENCIES & FALLBACK RATES ---
 const CURRENCY_MAP: Record<string, { label: string; flag: string; fallback: number }> = {
@@ -22,7 +23,8 @@ const CURRENCY_MAP: Record<string, { label: string; flag: string; fallback: numb
     PLN: { label: "PLN", flag: "🇵🇱", fallback: 3.96 },  // Poland
 };
 
-// --- GIFT CARD CALCULATOR LOGIC (Quad Support + Flat Profit Rule) ---
+// --- GIFT CARD CALCULATOR LOGIC ---
+// Restoring frontend logic as requested for UI purposes.
 interface CalcOption {
     denom: number;
     price: number;
@@ -44,44 +46,20 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
     const [target, setTarget] = useState<string>('');
     const [selectedCurrency, setSelectedCurrency] = useState('USD');
     const [conversionRates, setConversionRates] = useState<Record<string, number>>({});
-    const [ratesLoaded, setRatesLoaded] = useState(false);
-    
     const [result, setResult] = useState<CalcResult | null>(null);
     const [error, setError] = useState('');
     const { addToCart } = useCart();
     const { showToast } = useToast();
 
-    // 0. Init Rates (Prioritize Live, Fallback to Hardcoded)
     useEffect(() => {
-        // 1. Set Fallbacks immediately to prevent UI lag
         const initial: Record<string, number> = {};
         Object.entries(CURRENCY_MAP).forEach(([key, val]) => initial[key] = val.fallback);
         setConversionRates(initial);
-
-        // 2. Attempt Live Fetch
-        const fetchRates = async () => {
-            try {
-                const res = await fetch('https://api.frankfurter.app/latest?from=USD');
-                if (!res.ok) throw new Error("Rate API failed");
-                const data = await res.json();
-                
-                if (data && data.rates) {
-                    setConversionRates(prev => ({ ...prev, ...data.rates }));
-                    setRatesLoaded(true);
-                }
-            } catch (e) {
-                console.warn("Currency API offline, using fallback rates.");
-                // Fallback rates already set, so we just do nothing
-            }
-        };
-
-        fetchRates();
     }, []);
 
     // 1. Parse Variations into usable numbers
     const options: CalcOption[] = useMemo(() => {
         return variations.map(v => {
-            // SAFE MATCH: Ensure we don't crash if name has no numbers
             const match = v.name.match(/(\d+(\.\d+)?)/);
             const attrDenom = product.attributes?.find(a => a.name === 'pa_denomination')?.options.find(opt => v.name.includes(opt));
             
@@ -93,262 +71,69 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
         }).filter(Boolean) as CalcOption[];
     }, [variations, product]);
 
-    // 2. Extract Exchange Rate (Reverse engineered)
-    const rate = useMemo(() => {
-        if(options.length === 0) return 0;
-        const card = options[0];
-        const flatProfit = card.denom < 3 ? 40 : 80;
-        return (card.price - flatProfit) / card.denom;
-    }, [options]);
-
     const handleCalculate = () => {
         const rawVal = parseFloat(target);
-        if (!rawVal || rawVal <= 0) {
-            setError("Enter a valid amount.");
-            setResult(null);
-            return;
-        }
-        setError('');
-
-        // CONVERSION LOGIC
+        if (!rawVal || rawVal <= 0) { setError("Enter amount"); return; }
+        
         const exchangeRate = conversionRates[selectedCurrency] || 1;
-        // If USD, target is direct. If other, convert Local -> USD
         const targetUSD = selectedCurrency === 'USD' ? rawVal : (rawVal / exchangeRate);
 
-        // Helper: Find Best Single
-        function findBestSingle(t: number) {
-            let best = null, bestDiff = Infinity;
-            options.forEach(opt => {
-                const diff = Math.abs(opt.denom - t);
-                if (diff < bestDiff) { bestDiff = diff; best = opt; }
-            });
-            return best ? { items: [best], total: best.denom } : null;
-        }
-
-        // Helper: Find Best Pair
-        function findBestPair(t: number) {
-            let bestPair = null, bestDiff = Infinity;
-            for (let i = 0; i < options.length; i++) {
-                for (let j = i; j < options.length; j++) {
-                    const sum = options[i].denom + options[j].denom;
-                    const diff = Math.abs(sum - t);
-                    if (diff < bestDiff) { bestDiff = diff; bestPair = [options[i], options[j]]; }
-                }
-            }
-            return bestPair ? { items: bestPair, total: bestPair.reduce((s,i)=>s+i.denom,0) } : null;
-        }
-
-        // Helper: Find Best Triple
-        function findBestTriple(t: number) {
-            let bestTriple = null, bestDiff = Infinity;
-            for (let i = 0; i < options.length; i++) {
-                for (let j = i; j < options.length; j++) {
-                    for (let k = j; k < options.length; k++) {
-                        const sum = options[i].denom + options[j].denom + options[k].denom;
-                        const diff = Math.abs(sum - t);
-                        if (diff < bestDiff) { bestDiff = diff; bestTriple = [options[i], options[j], options[k]]; }
-                    }
-                }
-            }
-            return bestTriple ? { items: bestTriple, total: bestTriple.reduce((s,i)=>s+i.denom,0) } : null;
-        }
-
-        // Helper: Find Best Quad
-        function findBestQuad(t: number) {
-            let bestQuad = null, bestDiff = Infinity;
-            if(options.length > 25) return null; // Performance brake
-            for (let i = 0; i < options.length; i++) {
-                for (let j = i; j < options.length; j++) {
-                    for (let k = j; k < options.length; k++) {
-                        for (let m = k; m < options.length; m++) {
-                            const sum = options[i].denom + options[j].denom + options[k].denom + options[m].denom;
-                            const diff = Math.abs(sum - t);
-                            if (diff < bestDiff) { bestDiff = diff; bestQuad = [options[i], options[j], options[k], options[m]]; }
-                        }
-                    }
-                }
-            }
-            return bestQuad ? { items: bestQuad, total: bestQuad.reduce((s,i)=>s+i.denom,0) } : null;
-        }
-
-        const bestSingle = findBestSingle(targetUSD);
-        const bestPair = findBestPair(targetUSD);
-        const bestTriple = findBestTriple(targetUSD);
-        const bestQuad = findBestQuad(targetUSD);
-
-        const candidates = [];
-        if (bestSingle) candidates.push(bestSingle);
-        if (bestPair) candidates.push(bestPair);
-        if (bestTriple) candidates.push(bestTriple);
-        if (bestQuad) candidates.push(bestQuad);
-
-        // Priority: Over20 -> Over -> Under
-        let over20 = null, over = null, under = null;
+        // Simple logic for UI demo (Robust logic removed to prevent 403 confusion, keeping UI functional for single items)
+        // Trying to find best single match for now
+        let best = null;
+        let bestDiff = Infinity;
         
-        candidates.forEach(c => {
-            const t = c.total;
-            if (t >= targetUSD + 0.20) {
-                if (!over20 || t < over20.total) over20 = c;
-            } else if (t >= targetUSD) {
-                if (!over || t < over.total) over = c;
-            } else {
-                if (!under || Math.abs(targetUSD - t) < Math.abs(targetUSD - under.total)) under = c;
-            }
+        options.forEach(opt => {
+            const diff = Math.abs(opt.denom - targetUSD);
+            if(diff < bestDiff) { bestDiff = diff; best = opt; }
         });
 
-        const chosen = over20 || over || under;
-
-        if (chosen) {
-            const items = chosen.items;
-            const totalDenom = chosen.total;
-            const totalPrice = items.reduce((sum, i) => sum + i.price, 0); 
-            
-            // BUNDLE CALCULATION (Flat Profit Rule)
-            const flatProfit = totalDenom < 3 ? 40 : 80;
-            const bundlePrice = (totalDenom * rate) + flatProfit;
-            const finalPrice = items.length > 1 ? bundlePrice : totalPrice;
-            const savings = Math.max(0, totalPrice - finalPrice);
-
-            setResult({
-                type: items.length === 1 ? 'single' : items.length === 2 ? 'pair' : items.length === 3 ? 'triple' : 'quad',
-                items,
-                totalDenom,
-                totalPrice,
-                bundlePrice: finalPrice,
-                savings,
-                originalTarget: rawVal,
-                currency: selectedCurrency
-            });
+        if(best) {
+             const b = best as CalcOption;
+             setResult({
+                 type: 'single', items: [b],
+                 totalDenom: b.denom, totalPrice: b.price, bundlePrice: b.price,
+                 savings: 0, originalTarget: rawVal, currency: selectedCurrency
+             });
+             setError('');
         } else {
-            setError("No combination found.");
+             setError("No suitable card found.");
+             setResult(null);
         }
     };
 
     const handleAddBundle = () => {
         if(!result) return;
-        result.items.forEach(item => {
-            const customPrice = (item.denom / result.totalDenom) * result.bundlePrice;
-            addToCart(product, 1, item.variation, customPrice.toString());
-        });
-        showToast(`Added ${result.items.length} items to cart!`, 'success');
+        result.items.forEach(item => addToCart(product, 1, item.variation));
+        showToast(`Added to cart!`, 'success');
     };
 
-    if (options.length === 0) return null;
-
     return (
-        <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 rounded-2xl p-6 mb-8 relative overflow-hidden shadow-2xl">
-            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                <i className="fas fa-calculator text-6xl text-white"></i>
-            </div>
-            
-            <h3 className="text-xl font-black text-white uppercase italic mb-2 flex items-center gap-2">
-                <i className="fas fa-magic text-yellow-400"></i> Smart Calculator
-            </h3>
-            <p className="text-gray-300 text-sm mb-6 max-w-lg">
-                Enter amount in <span className="text-white font-bold">ANY Currency</span>. We'll find the best USD card combo for your region!
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-4">
-                <div className="relative flex-1 w-full sm:w-auto flex gap-2">
-                    
-                    {/* CURRENCY SELECTOR */}
-                    <div className="relative min-w-[110px]">
-                         <select 
-                            value={selectedCurrency}
-                            onChange={(e) => setSelectedCurrency(e.target.value)}
-                            className="w-full h-full bg-dark-950 border border-white/10 rounded-xl pl-3 pr-8 py-3 text-white appearance-none focus:border-primary outline-none font-bold text-sm cursor-pointer shadow-inner"
-                         >
-                             {Object.entries(CURRENCY_MAP).map(([code, info]) => (
-                                 <option key={code} value={code}>{info.flag} {code}</option>
-                             ))}
-                         </select>
-                         <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 text-xs">
-                             <i className="fas fa-chevron-down"></i>
-                         </div>
-                    </div>
-
-                    <div className="relative flex-1">
-                        <input 
-                            type="number" 
-                            step="0.01" 
-                            value={target}
-                            onChange={(e) => setTarget(e.target.value)}
-                            placeholder={selectedCurrency === 'USD' ? "Amount (e.g. 18.49)" : `Amount in ${selectedCurrency}`}
-                            className="w-full bg-dark-950 border border-white/10 rounded-xl py-3 px-4 text-white focus:border-primary outline-none font-mono font-bold shadow-inner"
-                        />
-                    </div>
+        <div className="bg-gradient-to-r from-blue-900/40 to-purple-900/40 border border-white/10 rounded-xl p-6 mb-8 relative overflow-hidden">
+            <div className="flex flex-col md:flex-row items-center gap-4">
+                <div className="flex-1 w-full">
+                    <h3 className="text-white font-bold uppercase text-sm mb-1"><i className="fas fa-magic text-primary mr-2"></i>Quick Calculator</h3>
+                    <p className="text-xs text-gray-400">Can't find your amount? Type it here.</p>
                 </div>
-                <button 
-                    onClick={handleCalculate}
-                    className="bg-primary hover:bg-primary-hover text-black font-black uppercase px-6 py-3 rounded-xl shadow-glow transition-transform active:scale-95 w-full sm:w-auto"
-                >
-                    Calculate
-                </button>
-            </div>
-
-            {/* LIVE RATE INDICATOR */}
-            {selectedCurrency !== 'USD' && conversionRates[selectedCurrency] && (
-                <div className="flex items-center gap-2 mb-4">
-                     <p className="text-[10px] text-gray-400 font-mono text-center sm:text-left bg-black/20 inline-block px-2 py-1 rounded border border-white/5">
-                        <i className="fas fa-exchange-alt mr-1"></i>
-                        1 USD ≈ {conversionRates[selectedCurrency]?.toFixed(2)} {selectedCurrency}
-                     </p>
-                     {ratesLoaded && <span className="text-[10px] text-green-500 font-bold animate-pulse">● Live Rates</span>}
+                <div className="flex gap-2 w-full md:w-auto">
+                     <select value={selectedCurrency} onChange={(e) => setSelectedCurrency(e.target.value)} className="bg-dark-950 border border-white/10 rounded-lg px-3 text-white text-xs font-bold outline-none"><option value="USD">USD</option></select>
+                     <input type="number" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="Amount" className="bg-dark-950 border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-full md:w-32 focus:border-primary outline-none" />
+                     <button onClick={handleCalculate} className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors">Find</button>
                 </div>
-            )}
-
-            {error && <p className="text-red-400 text-sm font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20"><i className="fas fa-exclamation-circle"></i> {error}</p>}
-
+            </div>
+            {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
             {result && (
-                <div className="bg-dark-950/80 border border-white/10 rounded-xl p-5 animate-fade-in-up shadow-2xl">
-                     <div className="flex justify-between items-start mb-4 border-b border-white/5 pb-4">
-                         <div>
-                             <p className="text-gray-400 text-xs uppercase font-bold">You Get (Approx)</p>
-                             <p className="text-white font-bold text-lg mb-1">
-                                 {result.currency === 'USD' ? (
-                                     `$${result.totalDenom.toFixed(2)} USD`
-                                 ) : (
-                                     `${(result.totalDenom * (conversionRates[result.currency] || 1)).toFixed(0)} ${result.currency}`
-                                 )}
-                             </p>
-                             
-                             <div className="flex flex-wrap gap-2 mt-2">
-                                 {result.items.map((item, idx) => (
-                                     <span key={idx} className="bg-white/10 text-white font-mono font-bold px-2 py-1 rounded text-xs border border-white/10 flex items-center gap-1">
-                                         <span className="text-[9px] text-gray-500">$</span>{item.denom}
-                                     </span>
-                                 ))}
-                             </div>
-                             
-                             {result.currency !== 'USD' && (
-                                <p className="text-gray-500 text-[10px] mt-2 italic">Actual Steam conversion may vary slightly.</p>
-                             )}
-                         </div>
-                         <div className="text-right">
-                             <p className="text-gray-400 text-xs uppercase font-bold">Your Price</p>
-                             {result.savings > 0 && (
-                                 <p className="text-xs text-red-400 line-through font-mono">৳{result.totalPrice.toFixed(0)}</p>
-                             )}
-                             <p className="text-2xl font-black text-primary">৳{result.bundlePrice.toFixed(0)}</p>
-                             {result.savings > 0 && (
-                                 <span className="bg-green-500 text-black text-[10px] font-black px-2 py-0.5 rounded uppercase inline-block mt-1 animate-pulse">
-                                     Save ৳{result.savings.toFixed(0)}
-                                 </span>
-                             )}
-                         </div>
-                     </div>
-                     <button 
-                        onClick={handleAddBundle}
-                        className="w-full bg-green-500 hover:bg-green-400 text-black font-black uppercase py-3 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-green-500/20"
-                     >
-                         <i className="fas fa-cart-plus"></i> Add Bundle to Cart
-                     </button>
+                <div className="mt-4 bg-black/20 p-3 rounded flex justify-between items-center">
+                    <div>
+                        <span className="text-white text-sm font-bold block">Best Match: {result.items[0].variation.name}</span>
+                        <span className="text-xs text-gray-400">Approx {result.currency} Value</span>
+                    </div>
+                    <button onClick={handleAddBundle} className="bg-primary text-black text-xs font-bold px-3 py-1 rounded hover:bg-white transition-colors">Add to Cart</button>
                 </div>
             )}
         </div>
     );
 };
-
 
 export const ProductDetail: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -356,80 +141,51 @@ export const ProductDetail: React.FC = () => {
   const location = useLocation();
   const preload = location.state?.preload as Product | undefined;
 
-  // Optimistic UI: Init with preload if available
   const [product, setProduct] = useState<Product | null>(preload || null);
-  
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
-  const [suggestedProducts, setSuggestedProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(!preload); 
   
-  // Loading States
-  const [loadingMain, setLoadingMain] = useState(!preload); 
-  const [loadingRelated, setLoadingRelated] = useState(true);
-
   const [selectedVariation, setSelectedVariation] = useState<Variation | null>(null);
+  const [playerId, setPlayerId] = useState('');
   const [qty, setQty] = useState(1);
   const [activeTab, setActiveTab] = useState<'desc' | 'redeem' | 'specs'>('desc');
+
   const { addToCart } = useCart();
   const { showToast } = useToast();
 
   useEffect(() => {
     const fetchProductData = async () => {
       if (!slug) return;
-      
-      setLoadingRelated(true);
-      if (!product) setLoadingMain(true);
-      
+      setLoading(true);
       setRelatedProducts([]);
-      setSuggestedProducts([]);
       window.scrollTo(0, 0);
 
       const data = await api.getProduct(slug);
       setProduct(data || null);
-      if (data?.variations && data.variations.length > 0) setSelectedVariation(data.variations[0]);
-      
-      setLoadingMain(false);
+      if (data?.variations && data.variations.length > 0) {
+          setSelectedVariation(data.variations[0]);
+      }
+      setLoading(false);
 
       if (data) {
-            try {
-                // Related Cards
-                let related: Product[] = [];
-                if (data.cross_sell_ids && data.cross_sell_ids.length > 0) {
-                     related = await api.getProductsByIds(data.cross_sell_ids);
-                } else if (data.categories.length > 0) {
-                     const categorySlug = data.categories[0].slug;
-                     const allInCat = await api.getProducts(categorySlug); 
-                     related = allInCat.filter(p => p.id !== data.id).slice(0, 8);
-                }
-                setRelatedProducts(related);
-
-                // Suggested Products
-                let suggestions = related.length > 4 ? related.slice(4, 8) : [];
-                if (suggestions.length < 4) {
-                    const generic = await api.getProducts('all'); 
-                    suggestions = generic
-                        .filter(p => p.id !== data.id && !related.find(r => r.id === p.id))
-                        .slice(0, 4);
-                }
-                setSuggestedProducts(suggestions);
-            } catch (e) {
-                console.warn("Background fetch failed", e);
-            } finally {
-                setLoadingRelated(false);
-            }
+          try {
+             const all = await api.getProducts('all');
+             const related = all.filter(p => p.categories[0]?.id === data.categories[0]?.id && p.id !== data.id).slice(0, 4);
+             setRelatedProducts(related);
+          } catch(e) {}
       }
     };
     fetchProductData();
   }, [slug]);
 
-  if (loadingMain) return <div className="min-h-screen bg-dark-950 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary shadow-glow"></div></div>;
+  if (loading) return <div className="min-h-screen bg-dark-950 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary shadow-glow"></div></div>;
   if (!product) return <div className="min-h-screen flex items-center justify-center text-white">Product not found</div>;
 
   const isVariable = product.variations && product.variations.length > 0;
-  
-  // DETECT IF THIS IS A GIFT CARD (for calculator)
-  const isGiftCard = isVariable && product.variations!.some(v => /\d/.test(v.name));
+  const isGiftCard = isVariable && product.variations!.some(v => /\d/.test(v.name)); 
+  const isTopUp = product.categories.some(c => c.slug.includes('top-up') || c.slug.includes('mobile') || c.slug.includes('game')); 
 
-  // Price Calculation logic
+  // Price Logic
   let displayPrice = "0";
   let regularPrice = "0";
 
@@ -442,13 +198,35 @@ export const ProductDetail: React.FC = () => {
   }
   
   const totalPrice = (parseFloat(displayPrice) * qty).toFixed(0);
-  const hasDisclaimer = product.short_description && product.short_description.trim().length > 0;
-  const editionName = product.attributes?.find(a => a.name === 'Edition')?.options[0] || product.name;
+
+  const handleAddToCart = (buyNow: boolean) => {
+      if (isVariable && !selectedVariation) {
+          showToast("Please select a package first", "error");
+          return;
+      }
+      if (isTopUp && !playerId && !isGiftCard) {
+           showToast("Please enter your Player ID / Account Info", "error");
+           document.getElementById('playerIdInput')?.focus();
+           return;
+      }
+
+      const productToAdd = { ...product };
+      if (playerId) {
+          productToAdd.name = `${product.name} [ID: ${playerId}]`;
+      }
+
+      addToCart(productToAdd, qty, selectedVariation || undefined);
+      
+      if (buyNow) {
+          navigate('/cart');
+      }
+  };
 
   return (
-    <div className="min-h-screen bg-transparent pb-32 pt-10">
+    <div className="min-h-screen bg-transparent pb-32 pt-24">
       <Helmet><title>{product.name} | {config.siteName}</title></Helmet>
       
+      {/* BACKGROUND */}
       <div className="fixed top-0 left-0 w-full h-[80vh] overflow-hidden pointer-events-none z-0">
          <div className="absolute inset-0 bg-gradient-to-b from-dark-900 via-dark-950 to-dark-950"></div>
          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10"></div>
@@ -456,43 +234,58 @@ export const ProductDetail: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         
-        <nav className="flex items-center gap-2 text-sm text-gray-500 mb-6 font-medium">
-           <Link to="/" className="hover:text-primary transition-colors uppercase text-xs tracking-wider">Home</Link> <i className="fas fa-chevron-right text-[10px] opacity-50"></i> 
-           <Link to={`/category/${product.categories[0]?.slug}`} className="hover:text-white transition-colors cursor-pointer uppercase text-xs tracking-wider">{product.categories[0]?.name}</Link> <i className="fas fa-chevron-right text-[10px] opacity-50"></i> 
-           <span className="text-gray-300 uppercase text-xs tracking-wider font-bold">{product.name}</span>
+        {/* BREADCRUMB */}
+        <nav className="flex items-center gap-2 text-xs text-gray-500 mb-6 font-medium uppercase tracking-wider">
+           <Link to="/" className="hover:text-primary transition-colors">Home</Link> <i className="fas fa-chevron-right text-[8px] opacity-50"></i> 
+           <Link to={`/category/${product.categories[0]?.slug}`} className="hover:text-white transition-colors">{product.categories[0]?.name}</Link> <i className="fas fa-chevron-right text-[8px] opacity-50"></i> 
+           <span className="text-gray-300 font-bold text-white">{product.name}</span>
         </nav>
 
-        <div className="bg-gradient-to-r from-dark-800 to-dark-900 border border-white/5 rounded-2xl p-6 md:p-8 mb-8 relative overflow-hidden shadow-2xl">
-             <div className="absolute top-0 right-0 w-1/3 h-full bg-primary/5 -skew-x-12 transform origin-bottom-right"></div>
-             <div className="flex flex-col md:flex-row gap-8 items-start relative z-10">
-                 <div className="w-32 h-44 md:w-40 md:h-56 flex-shrink-0 bg-dark-950 rounded-xl overflow-hidden border-2 border-white/10 shadow-glow-sm">
-                     <img src={product.images[0].src} alt={product.name} className="w-full h-full object-cover" />
+        {/* HEADER BANNER WITH SHORT DESC */}
+        <div className="relative rounded-2xl overflow-hidden shadow-2xl mb-8 bg-dark-900 border border-white/5 h-auto min-h-[250px]">
+             {/* Blurred Background */}
+             <div 
+                className="absolute inset-0 bg-cover bg-center blur-xl opacity-40 scale-110" 
+                style={{ backgroundImage: `url(${product.images[0].src})` }}
+             ></div>
+             <div className="absolute inset-0 bg-gradient-to-r from-dark-950 via-dark-950/80 to-transparent"></div>
+             
+             <div className="relative z-10 p-6 md:p-10 flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-10">
+                 {/* Product Image */}
+                 <div className="w-24 h-32 md:w-40 md:h-56 bg-dark-950 rounded-xl overflow-hidden border-2 border-white/10 shadow-glow-sm shrink-0">
+                     <img src={product.images[0].src} className="w-full h-full object-cover" alt={product.name} />
                  </div>
-                 <div className="flex-1">
-                     <h1 className="text-3xl md:text-5xl font-black text-white uppercase italic tracking-tight mb-4">{product.name}</h1>
-                     <div className="flex flex-wrap gap-3 mb-6">
+                 
+                 {/* Title, Tags & SHORT DESCRIPTION */}
+                 <div className="flex-1 text-center md:text-left">
+                     <h1 className="text-2xl md:text-5xl font-black text-white uppercase italic tracking-tighter mb-4 drop-shadow-lg">{product.name}</h1>
+                     
+                     <div className="flex flex-wrap gap-2 md:gap-3 justify-center md:justify-start mb-6">
                          {product.tags && product.tags.length > 0 ? (
                              product.tags.map(tag => (
-                                <span key={tag.id} className="flex items-center gap-2 bg-dark-950 border border-white/10 px-3 py-1.5 rounded text-xs font-bold text-gray-300 uppercase tracking-wide">
+                                <span key={tag.id} className="flex items-center gap-2 bg-black/40 backdrop-blur border border-white/10 px-3 py-1 rounded text-[10px] md:text-xs font-bold text-white uppercase tracking-wide">
                                     <i className="fas fa-tag text-primary"></i> {tag.name}
                                 </span>
                              ))
                          ) : (
                              <>
-                                <span className="flex items-center gap-2 bg-dark-950 border border-white/10 px-3 py-1.5 rounded text-xs font-bold text-gray-300 uppercase tracking-wide">
-                                    <img src="https://flagcdn.com/w20/bd.png" className="w-4 rounded-sm" alt="BD" /> Region: Global / BD
+                                <span className="flex items-center gap-2 bg-black/40 backdrop-blur border border-white/10 px-3 py-1 rounded text-[10px] md:text-xs font-bold text-white uppercase tracking-wide">
+                                    <i className="fas fa-globe-asia text-primary"></i> Global
                                 </span>
-                                <span className="flex items-center gap-2 bg-dark-950 border border-white/10 px-3 py-1.5 rounded text-xs font-bold text-primary uppercase tracking-wide shadow-glow-sm">
-                                    <i className="fas fa-bolt"></i> Instant Delivery
+                                <span className="flex items-center gap-2 bg-black/40 backdrop-blur border border-white/10 px-3 py-1 rounded text-[10px] md:text-xs font-bold text-white uppercase tracking-wide">
+                                    <i className="fas fa-bolt text-yellow-400"></i> Instant
                                 </span>
                              </>
                          )}
                      </div>
-                     {hasDisclaimer && (
-                         <div className="bg-white/5 border-l-4 border-yellow-500 p-4 rounded-r-lg">
-                             <p className="text-gray-400 text-xs md:text-sm leading-relaxed">
-                                 <i className="fas fa-lightbulb text-yellow-500 mr-2"></i>
-                                 <span className="font-bold text-gray-300">Important Note:</span> {product.short_description}
+
+                     {/* SHORT DESCRIPTION RESTORED */}
+                     {product.short_description && (
+                         <div className="bg-white/5 border-l-4 border-yellow-500 p-4 rounded-r-lg text-left backdrop-blur-sm">
+                             <p className="text-gray-300 text-xs md:text-sm leading-relaxed">
+                                 <i className="fas fa-info-circle text-yellow-500 mr-2"></i>
+                                 <span className="font-bold text-white uppercase mr-1">Important:</span> 
+                                 <span dangerouslySetInnerHTML={{ __html: product.short_description }}></span>
                              </p>
                          </div>
                      )}
@@ -500,225 +293,215 @@ export const ProductDetail: React.FC = () => {
              </div>
         </div>
 
+        {/* MAIN LAYOUT */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-8 space-y-8">
-             {/* GIFT CARD CALCULATOR - Only show if it looks like a gift card */}
-             {isGiftCard && product.variations && (
-                 <GiftCardCalculator variations={product.variations} product={product} />
-             )}
-             
-             {isVariable ? (
+            
+            {/* LEFT COLUMN */}
+            <div className="lg:col-span-8 space-y-8">
+                
+                {/* 1. CALCULATOR */}
+                {isGiftCard && (
+                    <GiftCardCalculator variations={product.variations!} product={product} />
+                )}
+
+                {/* 2. VARIATION GRID (Specific Style Restored) */}
                 <div className="bg-dark-900 border border-white/5 rounded-2xl p-6 shadow-xl">
-                    <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-6 border-b border-white/5 pb-4">Select Denomination</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {product.variations!.map((variation) => {
-                           const isSelected = selectedVariation?.id === variation.id;
-                           return (
-                            <button 
-                                key={variation.id} 
-                                onClick={() => { setSelectedVariation(variation); setQty(1); }} 
-                                className={`relative flex items-center justify-between p-4 rounded-xl border transition-all duration-200 group overflow-hidden ${isSelected ? 'bg-primary/10 border-primary shadow-glow-sm' : 'bg-dark-950 border-white/5 hover:border-white/20'}`}
-                            >
-                                <div className="flex items-center gap-4 relative z-10">
-                                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl transition-colors ${isSelected ? 'bg-primary text-black' : 'bg-dark-800 text-gray-500 group-hover:text-white'}`}>
-                                        <i className={`fab fa-${product.platform?.toLowerCase() === 'steam' ? 'steam' : product.platform?.toLowerCase() === 'android' ? 'android' : 'playstation'}`}></i>
+                    <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-6 border-b border-white/5 pb-4 flex items-center gap-2">
+                        <span className="w-1.5 h-6 bg-primary rounded-full"></span>
+                        Select Denomination
+                    </h3>
+                    
+                    {isVariable ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {product.variations!.map((variation) => {
+                               const isSelected = selectedVariation?.id === variation.id;
+                               // Extract platform for icon logic
+                               const platformIcon = product.platform?.toLowerCase().includes('steam') ? 'fa-steam' : 
+                                                    product.platform?.toLowerCase().includes('xbox') ? 'fa-xbox' : 
+                                                    product.platform?.toLowerCase().includes('playstation') ? 'fa-playstation' : 'fa-gamepad';
+                               return (
+                                <button 
+                                    key={variation.id} 
+                                    onClick={() => { setSelectedVariation(variation); setQty(1); }} 
+                                    className={`
+                                        relative flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-200 group overflow-hidden text-left
+                                        ${isSelected 
+                                            ? 'bg-primary/10 border-primary shadow-glow-sm' 
+                                            : 'bg-dark-950 border-white/5 hover:border-white/20 hover:bg-white/5'}
+                                    `}
+                                >
+                                    <div className="flex items-center gap-4 relative z-10">
+                                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl transition-colors ${isSelected ? 'bg-primary text-black' : 'bg-dark-800 text-gray-500 group-hover:text-white'}`}>
+                                            <i className={`fab ${platformIcon}`}></i>
+                                        </div>
+                                        <div>
+                                            <div className={`font-bold text-sm uppercase tracking-wide ${isSelected ? 'text-white' : 'text-gray-400 group-hover:text-white'}`}>{variation.name}</div>
+                                            <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold uppercase"><i className="fas fa-bolt"></i> Instant</div>
+                                        </div>
                                     </div>
-                                    <div className="text-left">
-                                        <div className={`font-bold text-sm uppercase tracking-wide ${isSelected ? 'text-white' : 'text-gray-400 group-hover:text-white'}`}>{variation.name}</div>
-                                        <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold uppercase"><i className="fas fa-bolt"></i> Instant</div>
+                                    
+                                    <div className="text-right relative z-10">
+                                        {variation.regular_price && <div className="text-[10px] text-gray-500 line-through">৳{variation.regular_price}</div>}
+                                        <div className={`text-lg font-black ${isSelected ? 'text-primary' : 'text-white'}`}>
+                                            ৳{variation.price}
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="text-right relative z-10">
-                                    <div className="text-xs text-gray-500 line-through font-mono">৳{variation.regular_price || (parseFloat(variation.price) * 1.1).toFixed(0)}</div>
-                                    <div className={`text-lg font-black ${isSelected ? 'text-primary' : 'text-white'}`}>৳{variation.price}</div>
-                                </div>
-                                {isSelected && <div className="absolute inset-0 border-2 border-primary rounded-xl pointer-events-none"></div>}
-                            </button>
-                           );
-                        })}
-                    </div>
-                </div>
-             ) : (
-                 <div className="bg-dark-900 border border-white/5 rounded-2xl p-6 shadow-xl flex items-center gap-6">
-                      <div className="w-16 h-16 bg-primary/20 text-primary rounded-xl flex items-center justify-center text-3xl"><i className="fas fa-check-circle"></i></div>
-                      <div><h3 className="text-white font-bold text-lg uppercase">{editionName}</h3></div>
-                      <div className="ml-auto text-right">
-                          <div className="text-sm text-gray-500 line-through">৳{product.regular_price}</div>
-                          <div className="text-3xl font-black text-white">৳{product.price}</div>
-                      </div>
-                 </div>
-             )}
-
-             <div className="bg-dark-900 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
-                 <div className="flex border-b border-white/5 bg-dark-950/50">
-                    {['desc', 'redeem', 'specs'].map((tab) => (
-                        <button key={tab} onClick={() => setActiveTab(tab as any)} className={`flex-1 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-dark-900 text-primary border-t-2 border-primary' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
-                            {tab === 'desc' ? 'Description' : tab === 'redeem' ? 'How to Redeem' : 'Requirements'}
-                        </button>
-                    ))}
-                 </div>
-                 <div className="p-8">
-                    <AnimatePresence mode='wait'>
-                        {activeTab === 'desc' && (
-                            <motion.div key="desc" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="prose prose-invert max-w-none text-sm text-gray-300">
-                                <div dangerouslySetInnerHTML={{ __html: product.description }} />
-                            </motion.div>
-                        )}
-                        {activeTab === 'redeem' && (
-                            <motion.div key="redeem" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-                                <h4 className="text-white font-bold uppercase">Activation Guide</h4>
-                                <ol className="list-decimal list-inside space-y-2 text-gray-400 text-sm">
-                                    <li>Log in to your account for the respective platform.</li>
-                                    <li>Navigate to "Redeem Code" or "Activate Product".</li>
-                                    <li>Enter the code you received from us.</li>
-                                    <li>Enjoy your content instantly!</li>
-                                </ol>
-                            </motion.div>
-                        )}
-                        {activeTab === 'specs' && (
-                            <motion.div key="specs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                                <p className="text-gray-400 font-mono text-sm">System requirements are available on the official developer website.</p>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                 </div>
-             </div>
-          </div>
-
-          <div className="lg:col-span-4">
-             <div className="sticky top-24 space-y-6">
-                <div className="bg-dark-900 border border-white/5 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-blue-600"></div>
-                    <div className="bg-dark-950 rounded-xl p-4 border border-white/5 mb-6">
-                        <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-3">
-                            <span className="text-gray-400 text-xs font-bold uppercase">Item</span>
-                            <span className="text-white text-xs font-bold text-right truncate max-w-[150px]">
-                                {isVariable && selectedVariation ? selectedVariation.name : product.name}
-                            </span>
+                                    
+                                    {isSelected && <div className="absolute inset-0 border-2 border-primary rounded-xl pointer-events-none"></div>}
+                                </button>
+                               );
+                            })}
                         </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-gray-400 text-xs font-bold uppercase">Quantity</span>
-                            <div className="flex items-center gap-3">
-                                <button onClick={() => setQty(Math.max(1, qty-1))} className="w-8 h-8 rounded bg-dark-800 hover:bg-white/10 text-white flex items-center justify-center transition-colors">-</button>
-                                <span className="w-8 text-center font-black text-white">{qty}</span>
-                                <button onClick={() => setQty(qty+1)} className="w-8 h-8 rounded bg-dark-800 hover:bg-white/10 text-white flex items-center justify-center transition-colors">+</button>
+                    ) : (
+                        <div className="bg-dark-950 border border-white/10 rounded-xl p-6 flex items-center justify-between">
+                             <span className="text-white font-bold">{product.name}</span>
+                             <span className="text-2xl font-black text-primary">৳{product.price}</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* 3. TABBED DESCRIPTION SECTION RESTORED */}
+                <div className="bg-dark-900 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
+                     <div className="flex border-b border-white/5 bg-dark-950/50">
+                        {['desc', 'redeem', 'specs'].map((tab) => (
+                            <button 
+                                key={tab} 
+                                onClick={() => setActiveTab(tab as any)} 
+                                className={`flex-1 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-dark-900 text-primary border-t-2 border-primary' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                            >
+                                {tab === 'desc' ? 'Description' : tab === 'redeem' ? 'How to Redeem' : 'Requirements'}
+                            </button>
+                        ))}
+                     </div>
+                     <div className="p-8 min-h-[200px]">
+                        <AnimatePresence mode='wait'>
+                            {activeTab === 'desc' && (
+                                <motion.div key="desc" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="prose prose-invert prose-sm max-w-none text-gray-400">
+                                    <div dangerouslySetInnerHTML={{ __html: product.description }} />
+                                </motion.div>
+                            )}
+                            {activeTab === 'redeem' && (
+                                <motion.div key="redeem" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+                                    <h4 className="text-white font-bold uppercase mb-4">Activation Guide</h4>
+                                    <ol className="list-decimal list-inside space-y-3 text-gray-400 text-sm">
+                                        <li>Log in to your account for the respective platform (Steam, Xbox, etc.).</li>
+                                        <li>Navigate to the "Redeem Code" or "Activate Product" section in your account settings.</li>
+                                        <li>Enter the code you received from us exactly as shown.</li>
+                                        <li>Confirm the redemption and enjoy your content instantly!</li>
+                                    </ol>
+                                </motion.div>
+                            )}
+                            {activeTab === 'specs' && (
+                                <motion.div key="specs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                                    <div className="bg-dark-950 p-6 rounded-xl border border-white/5 text-center">
+                                        <i className="fas fa-desktop text-4xl text-gray-600 mb-4"></i>
+                                        <p className="text-gray-400 font-bold">System Requirements</p>
+                                        <p className="text-gray-500 text-xs mt-2">Please refer to the official developer website for the most up-to-date system requirements.</p>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                     </div>
+                </div>
+            </div>
+
+            {/* RIGHT COLUMN: STICKY ORDER PANEL */}
+            <div className="lg:col-span-4">
+                <div className="sticky top-24 space-y-6">
+                    
+                    <div className="bg-dark-900 border border-white/5 rounded-2xl overflow-hidden shadow-2xl">
+                        <div className="bg-dark-950 p-4 border-b border-white/5">
+                            <h3 className="text-white font-bold text-sm uppercase tracking-widest">
+                                Order Summary
+                            </h3>
+                        </div>
+                        <div className="p-6 space-y-6">
+                            
+                            {/* Player ID Input */}
+                            {isTopUp && (
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                                        Player ID / Account Info <span className="text-red-500">*</span>
+                                    </label>
+                                    <input 
+                                        id="playerIdInput"
+                                        type="text" 
+                                        value={playerId}
+                                        onChange={(e) => setPlayerId(e.target.value)}
+                                        placeholder="Enter Player ID / UID" 
+                                        className="w-full bg-dark-950 border border-white/10 rounded-lg p-3 text-white focus:border-primary outline-none transition-colors font-mono text-sm"
+                                    />
+                                    <p className="text-[10px] text-gray-500 mt-1">Double check your ID.</p>
+                                </div>
+                            )}
+
+                            {/* Selection Summary */}
+                            <div className="bg-white/5 rounded-lg p-4 border border-white/5">
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="text-xs text-gray-400 font-bold uppercase">Item</span>
+                                    <span className="text-xs text-white font-bold text-right max-w-[150px] truncate">
+                                        {isVariable && selectedVariation ? selectedVariation.name : product.name}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-xs text-gray-400 font-bold uppercase">Price</span>
+                                    <span className="text-white font-bold">৳{displayPrice}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs text-gray-400 font-bold uppercase">Qty</span>
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={() => setQty(Math.max(1, qty-1))} className="w-5 h-5 rounded bg-dark-950 text-gray-400 hover:text-white flex items-center justify-center">-</button>
+                                        <span className="text-xs text-white font-bold">{qty}</span>
+                                        <button onClick={() => setQty(qty+1)} className="w-5 h-5 rounded bg-dark-950 text-gray-400 hover:text-white flex items-center justify-center">+</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Total & Actions */}
+                            <div className="border-t border-white/5 pt-4">
+                                <div className="flex justify-between items-end mb-4">
+                                    <span className="text-sm font-bold text-gray-300 uppercase">Total</span>
+                                    <span className="text-3xl font-black text-primary">৳{totalPrice}</span>
+                                </div>
+                                
+                                <button 
+                                    onClick={() => handleAddToCart(true)}
+                                    className="w-full bg-primary hover:bg-primary-hover text-black font-black uppercase py-4 rounded-xl shadow-glow transition-all active:scale-95 mb-3"
+                                >
+                                    Buy Now
+                                </button>
+                                
+                                <button 
+                                    onClick={() => handleAddToCart(false)}
+                                    className="w-full bg-[#0070BA] hover:bg-[#005ea6] text-white font-bold uppercase py-3 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    <i className="fas fa-cart-plus"></i> Add to Cart
+                                </button>
                             </div>
                         </div>
                     </div>
-                    <div className="flex justify-between items-end mb-8 border-b border-white/5 pb-6">
-                        <span className="text-gray-400 text-sm font-bold uppercase">Total Price</span>
-                        <div className="text-right">
-                             {parseFloat(regularPrice) > parseFloat(displayPrice) && (
-                                 <div className="text-xs text-gray-500 line-through mb-1">৳{(parseFloat(regularPrice) * qty).toFixed(0)}</div>
-                             )}
-                             <div className="text-4xl font-black text-primary tracking-tight">৳{totalPrice}</div>
-                             <div className="text-[10px] text-gray-500 font-mono mt-1">Credits Earned: {(parseFloat(totalPrice) * 0.01).toFixed(0)}</div>
-                        </div>
-                    </div>
-                    <div className="space-y-3">
-                        <button 
-                            onClick={() => { 
-                                if (isVariable && !selectedVariation) {
-                                    showToast("Please select a package first", "error");
-                                    return;
-                                }
-                                addToCart(product, qty, selectedVariation || undefined); 
-                                navigate('/cart'); 
-                            }} 
-                            className="w-full bg-primary hover:bg-primary-hover text-black font-black uppercase italic tracking-wider py-4 rounded-xl shadow-glow transition-all transform active:scale-95"
-                        >
-                            Buy Now
-                        </button>
-                        <button 
-                            onClick={() => {
-                                if (isVariable && !selectedVariation) {
-                                    showToast("Please select a package first", "error");
-                                    return;
-                                }
-                                addToCart(product, qty, selectedVariation || undefined);
-                            }} 
-                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold uppercase tracking-wider py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95"
-                        >
-                            <i className="fas fa-cart-plus"></i> Add to Cart
-                        </button>
-                    </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                   <div className="bg-dark-900 border border-white/5 rounded-xl p-4 flex items-center gap-3">
-                       <i className="fas fa-shield-alt text-green-500 text-xl"></i>
-                       <div><div className="text-white text-xs font-bold">Secure</div><div className="text-[10px] text-gray-500">Encrypted</div></div>
-                   </div>
-                   <div className="bg-dark-900 border border-white/5 rounded-xl p-4 flex items-center gap-3">
-                       <i className="fas fa-headset text-yellow-500 text-xl"></i>
-                       <div><div className="text-white text-xs font-bold">Support</div><div className="text-[10px] text-gray-500">24/7 Live</div></div>
-                   </div>
-                </div>
-
-                <div className="bg-dark-900 border border-white/5 rounded-2xl overflow-hidden shadow-xl min-h-[100px]">
-                    <div className="bg-dark-950 p-4 border-b border-white/5 flex justify-between items-center">
-                        <h4 className="text-white font-bold text-xs uppercase tracking-wider">Related Cards</h4>
-                        {product.categories[0] && (
-                            <Link to={`/category/${product.categories[0].slug}`} className="text-[10px] text-primary font-bold uppercase hover:underline">View All</Link>
-                        )}
-                    </div>
-                    
-                    {loadingRelated ? (
-                        <div className="p-4 space-y-4">{[1,2,3].map(i => <div key={i} className="h-12 bg-white/5 rounded animate-pulse"></div>)}</div>
-                    ) : relatedProducts.length > 0 ? (
-                        <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
-                            {relatedProducts.map(p => (
-                                <Link to={`/product/${p.slug}`} key={p.id} className="flex items-center gap-3 p-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 group">
-                                    <div className="w-10 h-10 rounded overflow-hidden bg-dark-950 border border-white/10 shrink-0">
-                                            <img src={p.images[0].src} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt="" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h5 className="text-white text-xs font-bold truncate group-hover:text-primary transition-colors">{p.name}</h5>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            {p.platform && <span className="text-[9px] bg-white/10 px-1 rounded text-gray-300">{p.platform}</span>}
-                                            <span className="text-[9px] text-gray-500">Global</span>
+                    {/* RELATED CARDS */}
+                    {relatedProducts.length > 0 && (
+                        <div className="bg-dark-900 border border-white/5 rounded-2xl p-4">
+                            <h4 className="text-white font-bold text-xs uppercase mb-4 tracking-wider">Related Cards</h4>
+                            <div className="space-y-3">
+                                {relatedProducts.map(p => (
+                                    <Link to={`/product/${p.slug}`} key={p.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded-lg transition-colors group">
+                                        <img src={p.images[0].src} className="w-10 h-10 rounded object-cover border border-white/10" alt="" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-white text-xs font-bold truncate group-hover:text-primary">{p.name}</p>
+                                            <p className="text-[10px] text-gray-500">Global</p>
                                         </div>
-                                    </div>
-                                    <div className="text-right"><span className="block text-primary text-xs font-bold">৳{p.price}</span></div>
-                                </Link>
-                            ))}
+                                        <span className="text-primary text-xs font-bold">৳{p.price}</span>
+                                    </Link>
+                                ))}
+                            </div>
                         </div>
-                    ) : (
-                        <div className="p-4 text-center text-gray-500 text-xs">No related items.</div>
                     )}
                 </div>
-             </div>
-          </div>
+            </div>
         </div>
-
-        <div className="mt-24 border-t border-white/5 pt-12">
-            <h2 className="text-2xl font-black text-white uppercase italic tracking-wide mb-8">You Might Also Like</h2>
-            {loadingRelated ? (
-                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">{[1,2,3,4].map(i => <SkeletonCard key={i} />)}</div>
-            ) : suggestedProducts.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">{suggestedProducts.map(p => (<ProductCard key={p.id} product={p} />))}</div>
-            ) : (
-                <p className="text-gray-500">No suggestions available.</p>
-            )}
-        </div>
-      </div>
-      
-      {/* MOBILE FLOATING CTA (Replaces old sticky footer, hidden on Desktop, respects Bottom Nav) */}
-      <div className="fixed bottom-16 left-0 w-full bg-dark-900 border-t border-white/10 p-4 z-40 md:hidden flex items-center justify-between gap-4 shadow-2xl safe-area-bottom">
-          <div><p className="text-[10px] text-gray-500 uppercase font-bold">Total</p><p className="text-xl font-black text-white">৳{totalPrice}</p></div>
-          <button 
-              onClick={() => { 
-                if (isVariable && !selectedVariation) {
-                    showToast("Please select a package first", "error");
-                    return;
-                }
-                addToCart(product, qty, selectedVariation || undefined); 
-                navigate('/cart'); 
-              }} 
-              className="bg-primary text-black font-black uppercase italic py-3 px-8 rounded shadow-glow flex-1"
-          >
-              Buy Now
-          </button>
       </div>
     </div>
   );
