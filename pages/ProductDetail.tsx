@@ -39,7 +39,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
         
         // Strict Validation to avoid 400 Bad Request
         if (isNaN(rawVal) || rawVal <= 0) {
-            setError("Enter a valid amount.");
+            setError("Please enter a valid price (e.g. 10.50)");
             setResult(null);
             return;
         }
@@ -64,7 +64,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                 matchType: data.matchType
             });
         } catch (e: any) {
-            setError(e.message || "Calculation failed");
+            setError(e.message || "Calculation failed. Try a different amount.");
             setResult(null);
         } finally {
             setLoadingCalc(false);
@@ -97,116 +97,148 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                 }
             );
         });
-        showToast(`Added items to cart securely!`, 'success');
+        showToast(`Bundle added to cart!`, 'success');
         setResult(null);
         setTarget('');
     };
 
     return (
-        <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 rounded-2xl p-6 mb-8 relative overflow-hidden shadow-2xl">
-            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                <i className="fas fa-calculator text-6xl text-white"></i>
-            </div>
-            
-            <h3 className="text-xl font-black text-white uppercase italic mb-2 flex items-center gap-2">
-                <i className="fas fa-magic text-yellow-400"></i> Smart Calculator
-            </h3>
-            <p className="text-gray-300 text-sm mb-6 max-w-lg">
-                Enter amount in <span className="text-white font-bold">ANY Currency</span>. Our secure system will calculate the best bundle.
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-4">
-                <div className="relative flex-1 w-full sm:w-auto flex gap-2">
-                    {/* CURRENCY SELECTOR */}
-                    <div className="relative min-w-[110px]">
-                         <select 
-                            value={selectedCurrency}
-                            onChange={(e) => setSelectedCurrency(e.target.value)}
-                            className="w-full h-full bg-dark-950 border border-white/10 rounded-xl pl-3 pr-8 py-3 text-white appearance-none focus:border-primary outline-none font-bold text-sm cursor-pointer shadow-inner"
-                         >
-                             {Object.entries(CURRENCY_MAP).map(([code, info]) => (
-                                 <option key={code} value={code}>{info.flag} {code}</option>
-                             ))}
-                         </select>
-                         <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 text-xs">
-                             <i className="fas fa-chevron-down"></i>
-                         </div>
-                    </div>
-
-                    <div className="relative flex-1">
-                        <input 
-                            type="number" 
-                            step="0.01" 
-                            value={target}
-                            onChange={(e) => setTarget(e.target.value)}
-                            placeholder={selectedCurrency === 'USD' ? "Amount (e.g. 18.49)" : `Amount in ${selectedCurrency}`}
-                            className="w-full bg-dark-950 border border-white/10 rounded-xl py-3 px-4 text-white focus:border-primary outline-none font-mono font-bold shadow-inner"
-                        />
-                    </div>
+        <div className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border border-indigo-500/30 rounded-2xl p-6 mb-8 relative overflow-hidden shadow-xl backdrop-blur-sm">
+            {/* Header / Value Prop */}
+            <div className="flex items-start gap-4 mb-6">
+                <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center shrink-0 border border-primary/30 shadow-glow-sm">
+                    <i className="fas fa-magic text-2xl text-primary"></i>
                 </div>
+                <div>
+                    <h3 className="text-xl font-black text-white uppercase italic tracking-wide">Custom Amount Builder</h3>
+                    <p className="text-gray-300 text-xs md:text-sm mt-1 leading-relaxed">
+                        Buying a game for <span className="text-white font-bold">$18.49</span>? Don't buy a $20 card! 
+                        Enter the exact game price below, and we'll build the perfect card bundle for you.
+                    </p>
+                </div>
+            </div>
+
+            {/* Input Area */}
+            <div className="bg-dark-950/60 p-4 rounded-xl border border-white/5 flex flex-col md:flex-row gap-3 items-center shadow-inner">
+                <div className="relative w-full md:w-auto min-w-[120px]">
+                     <select 
+                        value={selectedCurrency}
+                        onChange={(e) => setSelectedCurrency(e.target.value)}
+                        className="w-full bg-dark-900 border border-white/10 rounded-lg pl-3 pr-8 py-3 text-white appearance-none focus:border-primary outline-none font-bold text-sm cursor-pointer"
+                     >
+                         {Object.entries(CURRENCY_MAP).map(([code, info]) => (
+                             <option key={code} value={code}>{info.flag} {code}</option>
+                         ))}
+                     </select>
+                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 text-xs">
+                         <i className="fas fa-chevron-down"></i>
+                     </div>
+                </div>
+
+                <div className="relative flex-1 w-full">
+                    <input 
+                        type="number" 
+                        step="0.01" 
+                        value={target}
+                        onChange={(e) => setTarget(e.target.value)}
+                        placeholder="Enter Game Price (e.g. 18.49)"
+                        className="w-full bg-dark-900 border border-white/10 rounded-lg py-3 px-4 text-white focus:border-primary outline-none font-mono font-bold placeholder-gray-600"
+                    />
+                </div>
+                
                 <button 
                     onClick={handleCalculate}
                     disabled={loadingCalc}
-                    className="bg-primary hover:bg-primary-hover text-black font-black uppercase px-6 py-3 rounded-xl shadow-glow transition-transform active:scale-95 w-full sm:w-auto disabled:opacity-50"
+                    className="w-full md:w-auto bg-primary hover:bg-primary-hover text-black font-black uppercase px-6 py-3 rounded-lg shadow-glow transition-transform active:scale-95 disabled:opacity-50 whitespace-nowrap"
                 >
-                    {loadingCalc ? 'Calculating...' : 'Calculate'}
+                    {loadingCalc ? <i className="fas fa-spinner fa-spin"></i> : 'Build Bundle'}
                 </button>
             </div>
 
-            {error && <p className="text-red-400 text-sm font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20"><i className="fas fa-exclamation-circle"></i> {error}</p>}
+            {error && (
+                <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="mt-3 flex items-center gap-2 text-red-400 bg-red-500/10 p-3 rounded-lg border border-red-500/20 text-xs font-bold">
+                    <i className="fas fa-exclamation-circle"></i> {error}
+                </motion.div>
+            )}
 
-            {result && (
-                <div className="bg-dark-950/80 border border-white/10 rounded-xl p-5 animate-fade-in-up shadow-2xl">
-                     <div className="flex justify-between items-start mb-4 border-b border-white/5 pb-4">
-                         <div>
-                             <p className="text-gray-400 text-xs uppercase font-bold mb-2">Bundle Breakdown:</p>
-                             
-                             {/* CONVERSION BADGE (UI/UX Recommendation) */}
+            {/* Results Area */}
+            <AnimatePresence>
+                {result && (
+                    <motion.div 
+                        initial={{ opacity: 0, height: 0 }} 
+                        animate={{ opacity: 1, height: 'auto' }} 
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-6 bg-dark-950/80 border border-primary/20 rounded-xl overflow-hidden shadow-2xl"
+                    >
+                         {/* Result Header */}
+                         <div className="bg-primary/10 p-4 border-b border-primary/10 flex justify-between items-center">
+                             <div className="flex items-center gap-2">
+                                 <i className="fas fa-check-circle text-green-500"></i>
+                                 <span className="text-white font-bold text-sm uppercase">Bundle Ready</span>
+                             </div>
+                             {/* Conversion Info Badge */}
                              {result.requestedCurrency && result.currency && result.requestedCurrency !== result.currency && (
-                                 <div className="bg-blue-500/10 border border-blue-500/30 px-3 py-2 rounded-lg mb-3 inline-block">
-                                     <p className="text-blue-400 text-xs font-bold font-mono">
-                                         {result.requestedAmount} {result.requestedCurrency} ≈ {result.convertedAmount} {result.currency}
-                                     </p>
+                                 <div className="bg-dark-900 px-3 py-1 rounded text-xs font-mono text-blue-400 border border-blue-500/30">
+                                     {result.requestedAmount} {result.requestedCurrency} ≈ {result.convertedAmount} {result.currency}
+                                 </div>
+                             )}
+                         </div>
+
+                         <div className="p-5">
+                             {/* Match Warning */}
+                             {result.matchType === 'closest' && (
+                                 <div className="mb-4 bg-yellow-500/10 border border-yellow-500/30 p-3 rounded-lg flex gap-3 items-start">
+                                     <i className="fas fa-info-circle text-yellow-500 mt-0.5"></i>
+                                     <div>
+                                         <p className="text-yellow-500 text-xs font-bold uppercase">Closest Match Found</p>
+                                         <p className="text-gray-400 text-xs">We couldn't make exactly {result.convertedAmount || result.requestedAmount}. This bundle gives you <strong className="text-white">{result.actualAmount} {result.currency}</strong>.</p>
+                                     </div>
                                  </div>
                              )}
 
-                             {/* MATCH WARNING */}
-                             {result.matchType === 'closest' && (
-                                 <div className="bg-yellow-500/10 border border-yellow-500/30 px-3 py-2 rounded-lg mb-3">
-                                    <p className="text-yellow-500 text-xs font-bold">
-                                       <i className="fas fa-exclamation-triangle mr-1"></i> 
-                                       Closest match: {result.actualAmount} {result.currency}
-                                    </p>
-                                </div>
-                             )}
-                             
-                             <div className="flex flex-col gap-2 mt-2">
+                             {/* VISUAL CARD STACK */}
+                             <p className="text-gray-500 text-[10px] font-bold uppercase mb-3 tracking-widest">You will receive these codes:</p>
+                             <div className="flex flex-wrap gap-3 mb-6">
                                  {result.items.map((item: any, idx: number) => {
-                                     // Fallback: If backend didn't send name, look it up in variations
-                                     const displayName = item.name || variations.find(v => v.id === item.variationId)?.name || "Digital Code";
+                                     // Calculate single item denomination for display
+                                     const singleDenom = item.denomination; 
                                      return (
-                                        <span key={idx} className="text-white font-mono font-bold text-sm flex items-center gap-2">
-                                            <span className="bg-white/10 px-2 py-0.5 rounded text-xs">x{item.quantity}</span>
-                                            {displayName}
-                                        </span>
+                                        <div key={idx} className="flex items-center gap-2 bg-dark-800 border border-white/10 rounded-lg p-2 pr-4 shadow-md">
+                                            {/* Visual "Card" Icon */}
+                                            <div className="relative w-10 h-12 bg-gradient-to-br from-gray-700 to-gray-900 rounded border border-white/20 flex flex-col items-center justify-center shadow-inner">
+                                                <div className="text-[8px] text-gray-400 uppercase leading-none mb-0.5">{result.currency}</div>
+                                                <div className="text-xs font-black text-white">{singleDenom}</div>
+                                            </div>
+                                            
+                                            <div className="flex flex-col">
+                                                <span className="text-white font-bold text-sm">x{item.quantity}</span>
+                                                <span className="text-[10px] text-gray-500 uppercase">{product.platform || 'Gift Card'}</span>
+                                            </div>
+                                        </div>
                                      );
                                  })}
                              </div>
-                             <p className="text-gray-500 text-[10px] mt-2 italic"><i className="fas fa-shield-alt text-green-500"></i> Secure Price Verified</p>
+
+                             {/* Pricing & CTA */}
+                             <div className="flex items-end justify-between border-t border-white/5 pt-4">
+                                 <div>
+                                     <p className="text-gray-400 text-xs font-bold uppercase">Your Price</p>
+                                     <div className="flex items-baseline gap-2">
+                                         <span className="text-3xl font-black text-primary tracking-tight">৳{result.totalBDT}</span>
+                                         <span className="text-xs text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded"><i className="fas fa-bolt"></i> Instant</span>
+                                     </div>
+                                 </div>
+                                 <button 
+                                    onClick={handleAddBundle}
+                                    className="bg-green-600 hover:bg-green-500 text-white font-bold uppercase px-6 py-3 rounded-xl shadow-lg transition-all active:scale-95 flex items-center gap-2"
+                                 >
+                                     <i className="fas fa-cart-plus"></i> Add Bundle
+                                 </button>
+                             </div>
                          </div>
-                         <div className="text-right">
-                             <p className="text-gray-400 text-xs uppercase font-bold">Your Price</p>
-                             <p className="text-2xl font-black text-primary">৳{result.totalBDT}</p>
-                         </div>
-                     </div>
-                     <button 
-                        onClick={handleAddBundle}
-                        className="w-full bg-green-500 hover:bg-green-400 text-black font-black uppercase py-3 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-green-500/20"
-                     >
-                         <i className="fas fa-cart-plus"></i> Add Bundle to Cart
-                     </button>
-                </div>
-            )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };
