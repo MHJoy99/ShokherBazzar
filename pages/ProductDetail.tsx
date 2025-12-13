@@ -172,14 +172,8 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
         const chosen = over20 || over || under;
 
         if (chosen) {
-            // DELEGATE PRICING TO ENGINE, PASSING PRODUCT SPECIFIC EXCHANGE RATE
-            const calculation = calculateBundlePrice(
-                chosen.items, 
-                chosen.total, 
-                rawVal, 
-                selectedCurrency,
-                product.exchange_rate // Pass the rate from WP Plugin
-            );
+            // DELEGATE PRICING TO ENGINE
+            const calculation = calculateBundlePrice(chosen.items, chosen.total, rawVal, selectedCurrency);
             setResult(calculation);
         } else {
             setError("No combination found.");

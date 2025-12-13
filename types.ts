@@ -36,9 +36,7 @@ export interface Product {
   variations?: Variation[];
   type?: string;
   attributes?: { id: number; name: string; options: string[] }[];
-  featured: boolean;
-  // NEW: Dynamic Pricing Control from WP Admin
-  exchange_rate?: number; 
+  featured: boolean; 
 }
 
 export interface CartItem extends Product {

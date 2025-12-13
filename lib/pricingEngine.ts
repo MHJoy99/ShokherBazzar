@@ -25,22 +25,20 @@ export const calculateBundlePrice = (
     items: CalcOption[], 
     totalDenom: number, 
     rawTarget: number, 
-    currency: string,
-    dynamicRate?: number // NEW: Optional rate from WP API
+    currency: string
 ): CalcResult => {
     
     // 1. Calculate Standard Store Price (Sum of cards)
     const totalPrice = items.reduce((sum, i) => sum + i.price, 0); 
     
-    // 2. FIXED PROFIT MARGIN LOGIC
-    // PRIORITIZE: Rate from Product API (set in WP Admin) > Config Default
+    // 2. FIXED PROFIT MARGIN LOGIC (Controlled via config.ts)
+    // Base Rate = 132 BDT per 1 USD (or whatever is in config)
     const { baseRate, profitTier1, profitTier2, profitTierThreshold } = config.pricing;
-    const finalRate = dynamicRate && dynamicRate > 0 ? dynamicRate : baseRate;
     
     const flatProfit = totalDenom < profitTierThreshold ? profitTier1 : profitTier2;
     
     // New Bundle Price Calculation
-    let calculatedBundlePrice = (totalDenom * finalRate) + flatProfit;
+    let calculatedBundlePrice = (totalDenom * baseRate) + flatProfit;
     calculatedBundlePrice = Math.ceil(calculatedBundlePrice); // Round up to nearest integer
 
     // 3. Safety Check: If Store Price is cheaper than our formula (rare), use Store Price.
