@@ -94,14 +94,6 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
         }).filter(Boolean) as CalcOption[];
     }, [variations, product]);
 
-    // 2. Extract Exchange Rate (Reverse engineered)
-    const rate = useMemo(() => {
-        if(options.length === 0) return 0;
-        const card = options[0];
-        const flatProfit = card.denom < 3 ? 40 : 80;
-        return (card.price - flatProfit) / card.denom;
-    }, [options]);
-
     const handleCalculate = () => {
         const rawVal = parseFloat(target);
         if (!rawVal || rawVal <= 0) {
@@ -202,12 +194,23 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
         if (chosen) {
             const items = chosen.items;
             const totalDenom = chosen.total;
+            
+            // 1. Calculate Standard Store Price (Sum of cards)
             const totalPrice = items.reduce((sum, i) => sum + i.price, 0); 
             
-            // BUNDLE CALCULATION (Flat Profit Rule)
+            // 2. FIXED PROFIT MARGIN LOGIC (CTO UPDATE)
+            // Base Rate = 132 BDT per 1 USD
+            const BASE_RATE = 132;
             const flatProfit = totalDenom < 3 ? 40 : 80;
-            const bundlePrice = (totalDenom * rate) + flatProfit;
-            const finalPrice = items.length > 1 ? bundlePrice : totalPrice;
+            
+            // New Bundle Price Calculation
+            let calculatedBundlePrice = (totalDenom * BASE_RATE) + flatProfit;
+            calculatedBundlePrice = Math.ceil(calculatedBundlePrice); // Round up to nearest integer
+
+            // 3. Safety Check: If Store Price is cheaper than our formula (rare), use Store Price.
+            // This prevents user from paying MORE than buying individually.
+            const finalPrice = Math.min(totalPrice, calculatedBundlePrice);
+            
             const savings = Math.max(0, totalPrice - finalPrice);
 
             setResult({
