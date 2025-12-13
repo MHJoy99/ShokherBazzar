@@ -103,142 +103,154 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
     };
 
     return (
-        <div className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border border-indigo-500/30 rounded-2xl p-6 mb-8 relative overflow-hidden shadow-xl backdrop-blur-sm">
-            {/* Header / Value Prop */}
-            <div className="flex items-start gap-4 mb-6">
-                <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center shrink-0 border border-primary/30 shadow-glow-sm">
-                    <i className="fas fa-magic text-2xl text-primary"></i>
-                </div>
-                <div>
-                    <h3 className="text-xl font-black text-white uppercase italic tracking-wide">Custom Amount Builder</h3>
-                    <p className="text-gray-300 text-xs md:text-sm mt-1 leading-relaxed">
-                        Buying a game for <span className="text-white font-bold">$18.49</span>? Don't buy a $20 card! 
-                        Enter the exact game price below, and we'll build the perfect card bundle for you.
-                    </p>
-                </div>
-            </div>
-
-            {/* Input Area */}
-            <div className="bg-dark-950/60 p-4 rounded-xl border border-white/5 flex flex-col md:flex-row gap-3 items-center shadow-inner">
-                <div className="relative w-full md:w-auto min-w-[120px]">
-                     <select 
-                        value={selectedCurrency}
-                        onChange={(e) => setSelectedCurrency(e.target.value)}
-                        className="w-full bg-dark-900 border border-white/10 rounded-lg pl-3 pr-8 py-3 text-white appearance-none focus:border-primary outline-none font-bold text-sm cursor-pointer"
-                     >
-                         {Object.entries(CURRENCY_MAP).map(([code, info]) => (
-                             <option key={code} value={code}>{info.flag} {code}</option>
-                         ))}
-                     </select>
-                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 text-xs">
-                         <i className="fas fa-chevron-down"></i>
-                     </div>
+        <div className="bg-dark-900 border border-white/10 rounded-2xl p-5 mb-8 shadow-xl relative overflow-hidden">
+             {/* Background decoration */}
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/5 rounded-full blur-2xl pointer-events-none"></div>
+            
+            <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary border border-primary/20 shrink-0">
+                         <i className="fas fa-magic"></i>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-black text-white uppercase italic tracking-wide">Custom Amount</h3>
+                        <p className="text-gray-400 text-xs">Enter exact amount (e.g. 10.50), we build the bundle.</p>
+                    </div>
                 </div>
 
-                <div className="relative flex-1 w-full">
-                    <input 
-                        type="number" 
-                        step="0.01" 
-                        value={target}
-                        onChange={(e) => setTarget(e.target.value)}
-                        placeholder="Enter Game Price (e.g. 18.49)"
-                        className="w-full bg-dark-900 border border-white/10 rounded-lg py-3 px-4 text-white focus:border-primary outline-none font-mono font-bold placeholder-gray-600"
-                    />
+                {/* Input Group - Mobile Optimized */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 mb-2">
+                    {/* Currency */}
+                    <div className="sm:col-span-3 relative">
+                        <select 
+                            value={selectedCurrency}
+                            onChange={(e) => setSelectedCurrency(e.target.value)}
+                            className="w-full bg-dark-950 border border-white/10 rounded-lg h-12 pl-3 pr-8 text-white font-bold text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none appearance-none cursor-pointer transition-colors"
+                        >
+                            {Object.entries(CURRENCY_MAP).map(([code, info]) => (
+                                <option key={code} value={code}>{info.flag} {code}</option>
+                            ))}
+                        </select>
+                        <i className="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs pointer-events-none"></i>
+                    </div>
+
+                    {/* Amount */}
+                    <div className="sm:col-span-6 relative">
+                        <input 
+                            type="number" 
+                            step="0.01" 
+                            value={target}
+                            onChange={(e) => setTarget(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleCalculate()}
+                            placeholder="Amount"
+                            className="w-full bg-dark-950 border border-white/10 rounded-lg h-12 px-4 text-white font-mono font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-xs font-bold uppercase pointer-events-none">
+                            {selectedCurrency}
+                        </span>
+                    </div>
+
+                    {/* Button */}
+                    <div className="sm:col-span-3">
+                        <button 
+                            onClick={handleCalculate}
+                            disabled={loadingCalc}
+                            className="w-full h-12 bg-white/10 hover:bg-white/20 text-white font-bold uppercase rounded-lg transition-colors border border-white/5 active:scale-95 flex items-center justify-center gap-2"
+                        >
+                            {loadingCalc ? <i className="fas fa-spinner fa-spin"></i> : <span>Build</span>}
+                        </button>
+                    </div>
                 </div>
                 
-                <button 
-                    onClick={handleCalculate}
-                    disabled={loadingCalc}
-                    className="w-full md:w-auto bg-primary hover:bg-primary-hover text-black font-black uppercase px-6 py-3 rounded-lg shadow-glow transition-transform active:scale-95 disabled:opacity-50 whitespace-nowrap"
-                >
-                    {loadingCalc ? <i className="fas fa-spinner fa-spin"></i> : 'Build Bundle'}
-                </button>
-            </div>
+                {error && <p className="text-red-400 text-xs font-bold mt-2 ml-1 animate-fade-in-up"><i className="fas fa-exclamation-circle"></i> {error}</p>}
 
-            {error && (
-                <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="mt-3 flex items-center gap-2 text-red-400 bg-red-500/10 p-3 rounded-lg border border-red-500/20 text-xs font-bold">
-                    <i className="fas fa-exclamation-circle"></i> {error}
-                </motion.div>
-            )}
-
-            {/* Results Area */}
-            <AnimatePresence>
+                {/* RESULT SECTION */}
+                <AnimatePresence>
                 {result && (
                     <motion.div 
-                        initial={{ opacity: 0, height: 0 }} 
-                        animate={{ opacity: 1, height: 'auto' }} 
+                        initial={{ opacity: 0, y: 10 }} 
+                        animate={{ opacity: 1, y: 0 }} 
                         exit={{ opacity: 0, height: 0 }}
-                        className="mt-6 bg-dark-950/80 border border-primary/20 rounded-xl overflow-hidden shadow-2xl"
+                        className="mt-6 bg-black/40 rounded-xl border border-primary/30 overflow-hidden shadow-2xl"
                     >
-                         {/* Result Header */}
-                         <div className="bg-primary/10 p-4 border-b border-primary/10 flex justify-between items-center">
-                             <div className="flex items-center gap-2">
-                                 <i className="fas fa-check-circle text-green-500"></i>
-                                 <span className="text-white font-bold text-sm uppercase">Bundle Ready</span>
-                             </div>
-                             {/* Conversion Info Badge */}
-                             {result.requestedCurrency && result.currency && result.requestedCurrency !== result.currency && (
-                                 <div className="bg-dark-900 px-3 py-1 rounded text-xs font-mono text-blue-400 border border-blue-500/30">
+                        {/* Status Bar */}
+                        <div className="bg-primary/10 px-4 py-3 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
+                             <span className="text-primary text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                                 <i className="fas fa-check"></i> Bundle Ready
+                             </span>
+                             {/* Conversion info */}
+                             {result.requestedCurrency !== result.currency && (
+                                 <span className="text-blue-400 text-[10px] font-mono bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
                                      {result.requestedAmount} {result.requestedCurrency} ≈ {result.convertedAmount} {result.currency}
-                                 </div>
+                                 </span>
                              )}
-                         </div>
+                        </div>
 
-                         <div className="p-5">
+                        <div className="p-4 sm:p-5">
                              {/* Match Warning */}
                              {result.matchType === 'closest' && (
-                                 <div className="mb-4 bg-yellow-500/10 border border-yellow-500/30 p-3 rounded-lg flex gap-3 items-start">
-                                     <i className="fas fa-info-circle text-yellow-500 mt-0.5"></i>
+                                 <div className="mb-5 bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-lg flex gap-3 items-start">
+                                     <i className="fas fa-exclamation-triangle text-yellow-500 text-sm mt-0.5 shrink-0"></i>
                                      <div>
-                                         <p className="text-yellow-500 text-xs font-bold uppercase">Closest Match Found</p>
-                                         <p className="text-gray-400 text-xs">We couldn't make exactly {result.convertedAmount || result.requestedAmount}. This bundle gives you <strong className="text-white">{result.actualAmount} {result.currency}</strong>.</p>
+                                         <p className="text-yellow-500 text-xs font-bold uppercase mb-1">Closest Match Found</p>
+                                         <p className="text-gray-400 text-[11px] leading-relaxed">
+                                             Exact amount not available. We built a bundle for <strong className="text-white">{result.actualAmount} {result.currency}</strong> instead.
+                                         </p>
                                      </div>
                                  </div>
                              )}
 
-                             {/* VISUAL CARD STACK */}
-                             <p className="text-gray-500 text-[10px] font-bold uppercase mb-3 tracking-widest">You will receive these codes:</p>
-                             <div className="flex flex-wrap gap-3 mb-6">
-                                 {result.items.map((item: any, idx: number) => {
-                                     // Calculate single item denomination for display
-                                     const singleDenom = item.denomination; 
-                                     return (
-                                        <div key={idx} className="flex items-center gap-2 bg-dark-800 border border-white/10 rounded-lg p-2 pr-4 shadow-md">
-                                            {/* Visual "Card" Icon */}
-                                            <div className="relative w-10 h-12 bg-gradient-to-br from-gray-700 to-gray-900 rounded border border-white/20 flex flex-col items-center justify-center shadow-inner">
-                                                <div className="text-[8px] text-gray-400 uppercase leading-none mb-0.5">{result.currency}</div>
-                                                <div className="text-xs font-black text-white">{singleDenom}</div>
-                                            </div>
-                                            
-                                            <div className="flex flex-col">
-                                                <span className="text-white font-bold text-sm">x{item.quantity}</span>
-                                                <span className="text-[10px] text-gray-500 uppercase">{product.platform || 'Gift Card'}</span>
-                                            </div>
-                                        </div>
-                                     );
-                                 })}
+                             {/* Visual Cards (Horizontal Scroll on Mobile, Grid on Desktop) */}
+                             <div className="mb-6">
+                                 <p className="text-[10px] text-gray-500 font-bold uppercase mb-3 tracking-widest">You will receive these codes:</p>
+                                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
+                                     {result.items.map((item: any, idx: number) => (
+                                         <div key={idx} className="snap-start shrink-0 min-w-[130px] bg-dark-800 rounded-lg p-3 border border-white/10 flex flex-col gap-2 relative group hover:border-primary/50 transition-colors">
+                                             <div className="flex justify-between items-start">
+                                                 <span className="text-[9px] text-gray-500 uppercase font-bold">Code</span>
+                                                 <span className="bg-white/10 text-white text-[10px] px-1.5 rounded font-bold">x{item.quantity}</span>
+                                             </div>
+                                             <div className="flex items-center gap-2 mt-1">
+                                                 <div className="w-8 h-8 rounded bg-dark-950 flex items-center justify-center text-gray-400 border border-white/5 shadow-inner">
+                                                     <i className="fas fa-gift text-sm"></i>
+                                                 </div>
+                                                 <div>
+                                                     <p className="text-white font-black text-lg leading-none">{item.denomination}</p>
+                                                     <p className="text-[9px] text-gray-500 uppercase font-bold">{result.currency}</p>
+                                                 </div>
+                                             </div>
+                                         </div>
+                                     ))}
+                                 </div>
                              </div>
 
-                             {/* Pricing & CTA */}
-                             <div className="flex items-end justify-between border-t border-white/5 pt-4">
-                                 <div>
-                                     <p className="text-gray-400 text-xs font-bold uppercase">Your Price</p>
-                                     <div className="flex items-baseline gap-2">
-                                         <span className="text-3xl font-black text-primary tracking-tight">৳{result.totalBDT}</span>
-                                         <span className="text-xs text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded"><i className="fas fa-bolt"></i> Instant</span>
+                             {/* Pricing & CTA Block - Dedicated Section */}
+                             <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                                 <div className="flex items-end justify-between mb-4">
+                                     <div>
+                                         <p className="text-gray-400 text-[10px] font-bold uppercase mb-1">Total Bundle Price</p>
+                                         <div className="flex items-center gap-2">
+                                            <span className="text-green-500 text-[10px] font-bold bg-green-500/10 px-2 py-0.5 rounded uppercase tracking-wider"><i className="fas fa-bolt"></i> Instant</span>
+                                         </div>
+                                     </div>
+                                     <div className="text-right">
+                                         <span className="block text-3xl font-black text-primary tracking-tight leading-none">৳{result.totalBDT}</span>
                                      </div>
                                  </div>
+                                 
                                  <button 
-                                    onClick={handleAddBundle}
-                                    className="bg-green-600 hover:bg-green-500 text-white font-bold uppercase px-6 py-3 rounded-xl shadow-lg transition-all active:scale-95 flex items-center gap-2"
+                                     onClick={handleAddBundle}
+                                     className="w-full bg-primary hover:bg-primary-hover text-black font-black uppercase py-4 rounded-xl shadow-glow transition-transform active:scale-95 flex items-center justify-center gap-2 text-sm"
                                  >
-                                     <i className="fas fa-cart-plus"></i> Add Bundle
+                                     <span>Add Bundle To Cart</span>
+                                     <i className="fas fa-arrow-right"></i>
                                  </button>
                              </div>
-                         </div>
+                        </div>
                     </motion.div>
                 )}
-            </AnimatePresence>
+                </AnimatePresence>
+            </div>
         </div>
     );
 };
