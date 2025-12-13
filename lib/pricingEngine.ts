@@ -20,37 +20,31 @@ export interface CalcResult {
 }
 
 // THE "TWIN ENGINE" LOGIC
-// MATCHING BACKEND FORMULA: Price = (USD * Rate) + Fixed_Profit
+// Copy this logic logic to your WordPress PHP backend to enforce security.
 export const calculateBundlePrice = (
     items: CalcOption[], 
     totalDenom: number, 
     rawTarget: number, 
     currency: string,
-    exchangeRate?: number,
-    profitMargin?: number // NEW: Product-specific Fixed Profit
+    dynamicRate?: number // NEW: Optional rate from WP API
 ): CalcResult => {
     
-    // 1. Calculate Standard Store Price (Sum of individual variations as listed in WC)
-    // This typically already includes profit if loaded from backend, but we recalc to be sure.
+    // 1. Calculate Standard Store Price (Sum of cards)
     const totalPrice = items.reduce((sum, i) => sum + i.price, 0); 
     
-    // 2. FIXED PROFIT LOGIC
-    const { baseRate, defaultProfit } = config.pricing;
+    // 2. PERCENTAGE PROFIT MARGIN LOGIC
+    // PRIORITIZE: Rate from Product API (set in WP Admin) > Config Default
+    const { baseRate, profitMarginPercent } = config.pricing;
+    const finalRate = dynamicRate && dynamicRate > 0 ? dynamicRate : baseRate;
     
-    // USE PRODUCT SPECIFIC RATE AND PROFIT IF AVAILABLE
-    const rateToUse = exchangeRate && exchangeRate > 0 ? exchangeRate : baseRate;
-    const profitToUse = profitMargin !== undefined && profitMargin >= 0 ? profitMargin : defaultProfit;
-
-    // FORMULA: (Total USD * Rate) + Fixed Profit
-    // Note: If you have multiple items (e.g. 10 + 2), the backend would technically charge Profit on EACH item.
-    // However, for a "Bundle" calculator, we often want to show a competitive "Single Transaction" price.
-    // If you want STRICT strict matching of "Buying 2 cards", you should add profit * items.length.
-    // Given the request to match the "1700" example which was for a single card, this formula works.
+    // Formula: (USD * Rate) + (Margin %)
+    const baseCost = totalDenom * finalRate;
+    const marginMultiplier = 1 + (profitMarginPercent / 100);
     
-    let calculatedBundlePrice = (totalDenom * rateToUse) + profitToUse;
-    calculatedBundlePrice = Math.ceil(calculatedBundlePrice); 
+    let calculatedBundlePrice = baseCost * marginMultiplier;
+    calculatedBundlePrice = Math.ceil(calculatedBundlePrice); // Round up to nearest integer
 
-    // 3. Safety Check: If sum of individual cards is cheaper (rare), use that.
+    // 3. Safety Check: If Store Price is cheaper than our formula (rare), use Store Price.
     const finalPrice = Math.min(totalPrice, calculatedBundlePrice);
     
     const savings = Math.max(0, totalPrice - finalPrice);

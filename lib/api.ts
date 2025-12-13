@@ -1,5 +1,5 @@
 
-import { Product, Category, Order, User, OrderNote, Coupon, CalculatorInfo } from '../types';
+import { Product, Category, Order, User, OrderNote, Coupon } from '../types';
 import { config } from '../config';
 
 // UPDATED BACKEND DOMAINS
@@ -55,36 +55,41 @@ const fetchWordPress = async (endpoint: string) => {
     return response.json();
 };
 
-const mapWooProduct = (p: any): Product => ({
-  id: p.id,
-  name: p.name,
-  slug: p.slug,
-  price: p.price || "0.00",
-  regular_price: p.regular_price || "0.00",
-  sale_price: p.sale_price || "",
-  on_sale: p.on_sale,
-  short_description: p.short_description?.replace(/<[^>]*>?/gm, '') || "",
-  description: p.description || "",
-  images: (p.images && p.images.length > 0) 
-    ? p.images.map((img: any) => ({ id: img.id, src: img.src, alt: img.alt || p.name }))
-    : [{ id: 0, src: PLACEHOLDER_IMG, alt: p.name }],
-  categories: p.categories.map((c: any) => ({ id: c.id, name: c.name, slug: c.slug })),
-  tags: p.tags ? p.tags.map((t: any) => ({ id: t.id, name: t.name, slug: t.slug })) : [],
-  cross_sell_ids: p.cross_sell_ids || [],
-  stock_status: p.stock_status,
-  stock_quantity: p.stock_quantity,
-  average_rating: p.average_rating,
-  rating_count: p.rating_count,
-  platform: p.categories.some((c: any) => c.name.toLowerCase().includes('xbox')) ? 'Xbox' :
-            p.categories.some((c: any) => c.name.toLowerCase().includes('playstation')) ? 'PSN' : 'Steam',
-  type: p.type,
-  attributes: p.attributes || [],
-  variations: [],
-  featured: p.featured || false,
-  // NEW: Read exchange rate and profit margin from backend if available
-  exchange_rate: p.exchange_rate ? parseFloat(p.exchange_rate) : undefined,
-  profit_margin: p.profit_margin ? parseFloat(p.profit_margin) : undefined, // NEW
-});
+const mapWooProduct = (p: any): Product => {
+  // Extract Exchange Rate from WP Plugin Meta
+  // The PHP plugin saves it as '_giftcard_rate'
+  const rateMeta = p.meta_data?.find((m: any) => m.key === '_giftcard_rate');
+  const exchangeRate = rateMeta ? parseFloat(rateMeta.value) : undefined;
+
+  return {
+    id: p.id,
+    name: p.name,
+    slug: p.slug,
+    price: p.price || "0.00",
+    regular_price: p.regular_price || "0.00",
+    sale_price: p.sale_price || "",
+    on_sale: p.on_sale,
+    short_description: p.short_description?.replace(/<[^>]*>?/gm, '') || "",
+    description: p.description || "",
+    images: (p.images && p.images.length > 0) 
+      ? p.images.map((img: any) => ({ id: img.id, src: img.src, alt: img.alt || p.name }))
+      : [{ id: 0, src: PLACEHOLDER_IMG, alt: p.name }],
+    categories: p.categories.map((c: any) => ({ id: c.id, name: c.name, slug: c.slug })),
+    tags: p.tags ? p.tags.map((t: any) => ({ id: t.id, name: t.name, slug: t.slug })) : [],
+    cross_sell_ids: p.cross_sell_ids || [],
+    stock_status: p.stock_status,
+    stock_quantity: p.stock_quantity,
+    average_rating: p.average_rating,
+    rating_count: p.rating_count,
+    platform: p.categories.some((c: any) => c.name.toLowerCase().includes('xbox')) ? 'Xbox' :
+              p.categories.some((c: any) => c.name.toLowerCase().includes('playstation')) ? 'PSN' : 'Steam',
+    type: p.type,
+    attributes: p.attributes || [],
+    variations: [],
+    featured: p.featured || false,
+    exchange_rate: exchangeRate
+  };
+};
 
 export const api = {
   // OPTIMIZED: Fetches all products once and filters in-memory for speed.
@@ -225,132 +230,27 @@ export const api = {
       } catch (e) { return null; }
   },
 
-  // NEW: FETCH OFFICIAL EXCHANGE RATE FROM BACKEND
-  getCalculatorInfo: async (productId: number): Promise<CalculatorInfo | null> => {
-      try {
-          const response = await fetch(`${CUSTOM_API_URL}/product-calculator-info/${productId}`, {
-              headers: { 'Content-Type': 'application/json' }
-          });
-          if (!response.ok) return null;
-          return await response.json();
-      } catch (e) {
-          console.warn("Could not fetch calculator info", e);
-          return null;
-      }
-  },
-
-  // UPDATED: SECURE CALCULATOR LOGIC with Currency Support
-  calculateBundle: async (productId: number, amount: number, currency: string = 'USD'): Promise<any> => {
-      try {
-          const response = await fetch(`${CUSTOM_API_URL}/calculate-bundle`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                  product_id: productId, 
-                  amount,
-                  currency // Send currency so backend handles conversion (Priority 2)
-              })
-          });
-          
-          if (!response.ok) {
-              const err = await response.json();
-              return { success: false, message: err.message || 'Calculation failed' };
-          }
-          return await response.json();
-      } catch (e) {
-          console.error("Calculator Error:", e);
-          return { success: false, message: "Network error connecting to calculator." };
-      }
-  },
-
   createOrder: async (orderData: any): Promise<{ id: number; success: boolean; payment_url?: string; guest_token?: string }> => {
-    console.group("📦 ORDER CREATION");
+    // ... (logic handled by backend) ...
+    // Note: The 'custom_price' field we send will be validated by the new backend plugin logic in future steps.
     
-    // ... (Keep existing complex order logic) ...
-    // Track total difference between Standard Price and Custom (Bundle) Price
-    let totalStandardPrice = 0;
-    let totalCustomPrice = 0;
-
-    // SECURITY: NEW MULTI-TOKEN SUPPORT
-    // Tokens are now attached per line-item in the meta_data, not at the root.
-    
+    // Construct simplified payload for custom endpoint
     const line_items = orderData.items.map((item: any) => {
-        let standardUnitPrice = 0;
-        if (item.selectedVariation) {
-            standardUnitPrice = parseFloat(item.selectedVariation.price);
-        } else {
-            standardUnitPrice = item.on_sale && item.sale_price ? parseFloat(item.sale_price) : parseFloat(item.price);
-        }
-        
-        let customUnitPrice = standardUnitPrice;
-        if (item.custom_price) {
-            customUnitPrice = parseFloat(item.custom_price);
-        }
-
-        totalStandardPrice += (standardUnitPrice * item.quantity);
-        totalCustomPrice += (customUnitPrice * item.quantity);
-
-        const lineItemPayload: any = {
+        const payload: any = {
             product_id: item.id,
             quantity: item.quantity
         };
-
-        // Initialize meta_data array
-        const meta_data: any[] = [];
-
-        if (item.selectedVariation && item.selectedVariation.id) {
-            lineItemPayload.variation_id = Number(item.selectedVariation.id);
-            meta_data.push({ 
-                key: 'Selected Option', 
-                value: `${item.selectedVariation.name} (ID: ${item.selectedVariation.id})` 
-            });
+        if (item.selectedVariation) {
+            payload.variation_id = Number(item.selectedVariation.id);
         }
-
         if (item.custom_price) {
-            meta_data.push({ key: 'Bundle Promo', value: 'Active' });
-            
-            // ✅ NEW: ATTACH TOKEN PER ITEM
-            // This supports multiple bundles (e.g. Steam Bundle + Razer Bundle) in one cart
-            if (item.calculation_token) {
-                meta_data.push({ 
-                    key: '_calculation_token', 
-                    value: item.calculation_token 
-                });
-                
-                if (item.calculator_currency) {
-                    meta_data.push({ 
-                        key: '_calculator_currency', 
-                        value: item.calculator_currency 
-                    });
-                }
-                
-                // Optional: Store original amount requested for admin reference
-                if (item.calculator_amount) {
-                    meta_data.push({
-                        key: '_calculator_amount',
-                        value: item.calculator_amount.toString()
-                    });
-                }
-            }
+            // WE SEND THE CUSTOM PRICE HERE
+            // The backend MUST validate this using the same formula (Rate * Denom + Profit)
+            payload.total = item.custom_price; 
+            payload.meta_data = [{ key: 'Bundle Promo', value: 'Active' }];
         }
-        
-        if (meta_data.length > 0) {
-            lineItemPayload.meta_data = meta_data;
-        }
-
-        return lineItemPayload;
+        return payload;
     });
-
-    const discountNeeded = totalStandardPrice - totalCustomPrice;
-    
-    const fee_lines = [];
-    if (discountNeeded > 0.05) { 
-        fee_lines.push({
-            name: "Bundle Savings",
-            total: `-${discountNeeded.toFixed(2)}`,
-            tax_status: 'none'
-        });
-    }
 
     const meta_data = [];
     if (orderData.payment_method === 'manual') {
@@ -358,23 +258,15 @@ export const api = {
         meta_data.push({ key: 'sender_number', value: orderData.senderNumber });
     }
 
-    const payment_method_id = orderData.payment_method === 'manual' ? 'bacs' : 'uddoktapay';
-    const coupon_lines = orderData.coupon_code ? [{ code: orderData.coupon_code }] : [];
-
-    const payload: any = {
-        payment_method: payment_method_id,
+    const payload = {
+        payment_method: orderData.payment_method === 'manual' ? 'bacs' : 'uddoktapay',
         customer_id: orderData.customer_id || 0,
         billing: orderData.billing,
-        line_items, // Now contains tokens in meta_data
-        fee_lines, 
-        coupon_lines,
+        line_items,
+        coupon_lines: orderData.coupon_code ? [{ code: orderData.coupon_code }] : [],
         meta_data,
-        trxId: orderData.trxId, 
-        senderNumber: orderData.senderNumber, 
-        customer_note: orderData.payment_method === 'manual' ? `TrxID: ${orderData.trxId}` : "Headless Order"
+        customer_note: orderData.payment_method === 'manual' ? `TrxID: ${orderData.trxId}` : "Order via App"
     };
-
-    console.groupEnd();
 
     try {
         const response = await fetch(`${CUSTOM_API_URL}/create-order`, {
@@ -385,35 +277,19 @@ export const api = {
 
         if (response.ok) {
             const data = await response.json();
-            
-            const baseResult = {
-                id: data.id,
-                success: true,
-                guest_token: data.guest_token
-            };
-
-            if (data.payment_url) {
-                return { ...baseResult, payment_url: data.payment_url };
-            }
-            
-            if (orderData.payment_method !== 'manual' && data.order_key) {
-                const wpPayLink = `https://admin.mhjoygamershub.com/checkout/order-pay/${data.id}/?pay_for_order=true&key=${data.order_key}`;
-                return { ...baseResult, payment_url: wpPayLink };
-            }
-
+            const baseResult = { id: data.id, success: true, guest_token: data.guest_token };
+            if (data.payment_url) return { ...baseResult, payment_url: data.payment_url };
             return baseResult;
         } else {
             const err = await response.json();
             throw new Error(err.message || 'Order creation failed');
         }
     } catch (proxyError: any) {
-        console.error("❌ NETWORK ERROR:", proxyError);
         throw proxyError;
     }
   },
 
   verifyPayment: async (orderId: number, invoiceId?: string): Promise<boolean> => {
-      // Keep existing logic
       await new Promise(r => setTimeout(r, 1500));
       try {
           const res = await fetch(`${CUSTOM_API_URL}/verify-payment`, {
@@ -423,9 +299,7 @@ export const api = {
           });
           if (res.status === 404) return false;
           return res.ok;
-      } catch (e) {
-          return false;
-      }
+      } catch (e) { return false; }
   },
 
   sendMessage: async (formData: any): Promise<boolean> => {
@@ -506,7 +380,6 @@ export const api = {
       } catch (e) { return null; }
   },
   
-  // Backward compatibility alias
   getProfile: async (email: string) => api.getProfileSync(email),
 
   getUserOrders: async (userId: number): Promise<Order[]> => {
@@ -530,7 +403,7 @@ export const api = {
                   name: i.name,
                   quantity: i.quantity,
                   license_key: i.license_keys && i.license_keys.length > 0 ? i.license_keys.join(' | ') : null,
-                  image: i.image || PLACEHOLDER_IMG, // Use fallback
+                  image: i.image || PLACEHOLDER_IMG,
                   downloads: [],
               }))
           }));

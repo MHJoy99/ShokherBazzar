@@ -6,8 +6,9 @@ export const config = {
     
     // CENTRALIZED PRICING CONTROL
     pricing: {
-        baseRate: 135,       // Default Rate (1 USD = 135 BDT)
-        defaultProfit: 80,   // Fixed Profit Amount in BDT (e.g. adds 80tk to base cost)
+        baseRate: 135,       // Default Rate (Updated to your preference)
+        profitMarginPercent: 1, // 1% Margin
+        // Legacy fields removed to prevent confusion
     },
 
     payment: {

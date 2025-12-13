@@ -14,42 +14,6 @@ export interface Coupon {
     discount_type: 'percent' | 'fixed_cart';
 }
 
-// Interface for the Calculator Info Endpoint
-export interface CalculatorInfo {
-    product_id: number;
-    currency: string;      // e.g. "USD"
-    exchange_rate: number; // e.g. 129
-    denominations: number[];
-    min_amount: number;
-    max_amount: number;
-}
-
-// NEW: Interface for Calculator Calculation Result
-export interface CalculatorResult {
-    success: boolean;
-    requested_amount: number;
-    actual_amount: number;
-    match_type: 'exact' | 'closest';
-    currency: string;
-    total_bdt: number;
-    items: {
-        variation_id: number;
-        name: string;
-        quantity: number;
-        unit_price_bdt: number;
-        subtotal_bdt: number;
-    }[];
-    // New fields from CTO
-    calculation_token?: string; 
-    conversion?: {
-        original_amount: number;
-        original_currency: string;
-        converted_amount: number;
-        converted_currency: string;
-    };
-    message?: string;
-}
-
 export interface Product {
   id: number;
   name: string;
@@ -72,21 +36,15 @@ export interface Product {
   variations?: Variation[];
   type?: string;
   attributes?: { id: number; name: string; options: string[] }[];
-  featured: boolean; 
+  featured: boolean;
+  // NEW: Dynamic Pricing Control from WP Admin
   exchange_rate?: number; 
-  profit_margin?: number; // New field for Fixed Profit Amount from Backend
 }
 
 export interface CartItem extends Product {
   quantity: number;
   selectedVariation?: Variation;
   custom_price?: string; // For bundle pricing overrides
-  
-  // SECURITY TOKEN FIELDS
-  calculation_token?: string;
-  calculator_product_id?: number;
-  calculator_amount?: number;
-  calculator_currency?: string; // NEW: Added per CTO checklist
 }
 
 export interface Category {
