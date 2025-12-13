@@ -276,7 +276,8 @@ export const api = {
               
               items: Array.isArray(data.items) ? data.items.map((i: any) => ({
                   // Map: variation_id -> variationId
-                  variationId: i.variation_id,         
+                  variationId: i.variation_id,
+                  name: i.name, // Added mapping for name
                   
                   quantity: i.quantity,
                   

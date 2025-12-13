@@ -152,15 +152,21 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                 <div className="bg-dark-950/80 border border-white/10 rounded-xl p-5 animate-fade-in-up shadow-2xl">
                      <div className="flex justify-between items-start mb-4 border-b border-white/5 pb-4">
                          <div>
-                             <p className="text-gray-400 text-xs uppercase font-bold">We will send you:</p>
+                             <p className="text-gray-400 text-xs uppercase font-bold mb-2">
+                                 Bundle for <span className="text-white text-sm">{result.requestedAmount} {result.currency}</span>:
+                             </p>
                              
                              <div className="flex flex-col gap-2 mt-2">
-                                 {result.items.map((item: any, idx: number) => (
-                                     <span key={idx} className="text-white font-mono font-bold text-sm flex items-center gap-2">
-                                         <span className="bg-white/10 px-2 py-0.5 rounded text-xs">x{item.quantity}</span>
-                                         {item.name}
-                                     </span>
-                                 ))}
+                                 {result.items.map((item: any, idx: number) => {
+                                     // Fallback: If backend didn't send name, look it up in variations
+                                     const displayName = item.name || variations.find(v => v.id === item.variationId)?.name || "Digital Code";
+                                     return (
+                                        <span key={idx} className="text-white font-mono font-bold text-sm flex items-center gap-2">
+                                            <span className="bg-white/10 px-2 py-0.5 rounded text-xs">x{item.quantity}</span>
+                                            {displayName}
+                                        </span>
+                                     );
+                                 })}
                              </div>
                              <p className="text-gray-500 text-[10px] mt-2 italic"><i className="fas fa-shield-alt text-green-500"></i> Secure Price Verified</p>
                          </div>
