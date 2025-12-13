@@ -14,11 +14,12 @@ import { ProductCard } from '../components/ProductCard';
 // --- CONFIG: SUPPORTED CURRENCIES & FALLBACK RATES ---
 const CURRENCY_MAP: Record<string, { label: string; flag: string; fallback: number }> = {
     USD: { label: "USD", flag: "🇺🇸", fallback: 1 },
+    GBP: { label: "GBP", flag: "🇬🇧", fallback: 0.79 }, // Great Britain
+    EUR: { label: "EUR", flag: "🇪🇺", fallback: 0.93 },  // Euro
     UAH: { label: "UAH", flag: "🇺🇦", fallback: 41.60 }, // Ukraine
     INR: { label: "INR", flag: "🇮🇳", fallback: 84.10 }, // India
     TRY: { label: "TRY", flag: "🇹🇷", fallback: 34.25 }, // Turkey
     ARS: { label: "ARS", flag: "🇦🇷", fallback: 980.50 }, // Argentina
-    EUR: { label: "EUR", flag: "🇪🇺", fallback: 0.93 },  // Euro
     BRL: { label: "BRL", flag: "🇧🇷", fallback: 5.75 },  // Brazil
     PLN: { label: "PLN", flag: "🇵🇱", fallback: 3.96 },  // Poland
 };
@@ -54,7 +55,13 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                 totalBDT: data.totalBDT,
                 calculationToken: data.calculationToken,
                 currency: data.currency,
-                requestedAmount: data.requestedAmount
+                requestedAmount: data.requestedAmount,
+                
+                // New Conversion Fields from Backend
+                requestedCurrency: data.requestedCurrency,
+                convertedAmount: data.convertedAmount,
+                actualAmount: data.actualAmount,
+                matchType: data.matchType
             });
         } catch (e: any) {
             setError(e.message || "Calculation failed");
@@ -84,7 +91,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                 priceOverride, // Custom Price from Backend
                 {
                     token: result.calculationToken,
-                    currency: result.currency,
+                    currency: result.currency, // Store BASE currency (e.g. USD)
                     timestamp: Date.now(),
                     originalDenom: item.denomination
                 }
@@ -152,9 +159,26 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                 <div className="bg-dark-950/80 border border-white/10 rounded-xl p-5 animate-fade-in-up shadow-2xl">
                      <div className="flex justify-between items-start mb-4 border-b border-white/5 pb-4">
                          <div>
-                             <p className="text-gray-400 text-xs uppercase font-bold mb-2">
-                                 Bundle for <span className="text-white text-sm">{result.requestedAmount} {result.currency}</span>:
-                             </p>
+                             <p className="text-gray-400 text-xs uppercase font-bold mb-2">Bundle Breakdown:</p>
+                             
+                             {/* CONVERSION BADGE (UI/UX Recommendation) */}
+                             {result.requestedCurrency && result.currency && result.requestedCurrency !== result.currency && (
+                                 <div className="bg-blue-500/10 border border-blue-500/30 px-3 py-2 rounded-lg mb-3 inline-block">
+                                     <p className="text-blue-400 text-xs font-bold font-mono">
+                                         {result.requestedAmount} {result.requestedCurrency} ≈ {result.convertedAmount} {result.currency}
+                                     </p>
+                                 </div>
+                             )}
+
+                             {/* MATCH WARNING */}
+                             {result.matchType === 'closest' && (
+                                 <div className="bg-yellow-500/10 border border-yellow-500/30 px-3 py-2 rounded-lg mb-3">
+                                    <p className="text-yellow-500 text-xs font-bold">
+                                       <i className="fas fa-exclamation-triangle mr-1"></i> 
+                                       Closest match: {result.actualAmount} {result.currency}
+                                    </p>
+                                </div>
+                             )}
                              
                              <div className="flex flex-col gap-2 mt-2">
                                  {result.items.map((item: any, idx: number) => {

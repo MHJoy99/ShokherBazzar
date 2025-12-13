@@ -237,7 +237,7 @@ export const api = {
           const payload = {
               productId: Number(productId),
               amount: Number(amount),
-              currency: String(currency)
+              currency: String(currency) // Ensure currency is passed
           };
 
           // Pre-flight check
@@ -269,10 +269,16 @@ export const api = {
               // Map: total_bdt -> totalBDT
               totalBDT: data.total_bdt,                
               
-              // Map: currency -> currency
+              // Map: currency -> currency (This is the BASE currency of the card, e.g. USD)
               currency: data.currency || 'USD',
               
               requestedAmount: data.requested_amount || payload.amount,
+              
+              // NEW: Currency Conversion Fields
+              requestedCurrency: data.requested_currency,
+              convertedAmount: data.converted_amount,
+              actualAmount: data.actual_amount,
+              matchType: data.match_type, // 'exact' or 'closest'
               
               items: Array.isArray(data.items) ? data.items.map((i: any) => ({
                   // Map: variation_id -> variationId
