@@ -10,6 +10,7 @@ import { Helmet } from 'react-helmet-async';
 import { config } from '../config';
 import { SkeletonCard } from '../components/Skeleton';
 import { ProductCard } from '../components/ProductCard';
+import { calculateBundlePrice, CalcResult, CalcOption } from '../lib/pricingEngine';
 
 // --- CONFIG: SUPPORTED CURRENCIES & FALLBACK RATES ---
 const CURRENCY_MAP: Record<string, { label: string; flag: string; fallback: number }> = {
@@ -22,24 +23,6 @@ const CURRENCY_MAP: Record<string, { label: string; flag: string; fallback: numb
     BRL: { label: "BRL", flag: "🇧🇷", fallback: 5.75 },  // Brazil
     PLN: { label: "PLN", flag: "🇵🇱", fallback: 3.96 },  // Poland
 };
-
-// --- GIFT CARD CALCULATOR LOGIC (Quad Support + Flat Profit Rule) ---
-interface CalcOption {
-    denom: number;
-    price: number;
-    variation: Variation;
-}
-
-interface CalcResult {
-    type: 'single' | 'pair' | 'triple' | 'quad';
-    items: CalcOption[];
-    totalDenom: number;
-    totalPrice: number;
-    bundlePrice: number;
-    savings: number;
-    originalTarget: number;
-    currency: string;
-}
 
 const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }> = ({ variations, product }) => {
     const [target, setTarget] = useState<string>('');
@@ -108,7 +91,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
         // If USD, target is direct. If other, convert Local -> USD
         const targetUSD = selectedCurrency === 'USD' ? rawVal : (rawVal / exchangeRate);
 
-        // Helper: Find Best Single
+        // COMBINATORICS LOGIC (Finding the cards)
         function findBestSingle(t: number) {
             let best = null, bestDiff = Infinity;
             options.forEach(opt => {
@@ -118,7 +101,6 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
             return best ? { items: [best], total: best.denom } : null;
         }
 
-        // Helper: Find Best Pair
         function findBestPair(t: number) {
             let bestPair = null, bestDiff = Infinity;
             for (let i = 0; i < options.length; i++) {
@@ -131,7 +113,6 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
             return bestPair ? { items: bestPair, total: bestPair.reduce((s,i)=>s+i.denom,0) } : null;
         }
 
-        // Helper: Find Best Triple
         function findBestTriple(t: number) {
             let bestTriple = null, bestDiff = Infinity;
             for (let i = 0; i < options.length; i++) {
@@ -146,7 +127,6 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
             return bestTriple ? { items: bestTriple, total: bestTriple.reduce((s,i)=>s+i.denom,0) } : null;
         }
 
-        // Helper: Find Best Quad
         function findBestQuad(t: number) {
             let bestQuad = null, bestDiff = Infinity;
             if(options.length > 25) return null; // Performance brake
@@ -192,37 +172,15 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
         const chosen = over20 || over || under;
 
         if (chosen) {
-            const items = chosen.items;
-            const totalDenom = chosen.total;
-            
-            // 1. Calculate Standard Store Price (Sum of cards)
-            const totalPrice = items.reduce((sum, i) => sum + i.price, 0); 
-            
-            // 2. FIXED PROFIT MARGIN LOGIC (CTO UPDATE)
-            // Base Rate = 132 BDT per 1 USD
-            const BASE_RATE = 132;
-            const flatProfit = totalDenom < 3 ? 40 : 80;
-            
-            // New Bundle Price Calculation
-            let calculatedBundlePrice = (totalDenom * BASE_RATE) + flatProfit;
-            calculatedBundlePrice = Math.ceil(calculatedBundlePrice); // Round up to nearest integer
-
-            // 3. Safety Check: If Store Price is cheaper than our formula (rare), use Store Price.
-            // This prevents user from paying MORE than buying individually.
-            const finalPrice = Math.min(totalPrice, calculatedBundlePrice);
-            
-            const savings = Math.max(0, totalPrice - finalPrice);
-
-            setResult({
-                type: items.length === 1 ? 'single' : items.length === 2 ? 'pair' : items.length === 3 ? 'triple' : 'quad',
-                items,
-                totalDenom,
-                totalPrice,
-                bundlePrice: finalPrice,
-                savings,
-                originalTarget: rawVal,
-                currency: selectedCurrency
-            });
+            // DELEGATE PRICING TO ENGINE, PASSING PRODUCT SPECIFIC EXCHANGE RATE
+            const calculation = calculateBundlePrice(
+                chosen.items, 
+                chosen.total, 
+                rawVal, 
+                selectedCurrency,
+                product.exchange_rate // Pass the rate from WP Plugin
+            );
+            setResult(calculation);
         } else {
             setError("No combination found.");
         }
