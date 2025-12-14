@@ -106,9 +106,12 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
     const getApproxValue = () => {
         if (!result) return '0';
         const rate = CURRENCY_MAP[selectedCurrency]?.fallback || 1;
-        // result.actualAmount is in USD (e.g. 8.5)
-        // 8.5 * 41.60 = 353.6 -> Round to 354
-        return (result.actualAmount * rate).toFixed(0);
+        // result.actualAmount is in USD (e.g. 7.68)
+        // 7.68 * 1 = 7.68
+        const val = result.actualAmount * rate;
+        
+        // Show exact decimals if present (up to 2) to avoid misleading "8 USD" when it's "7.68 USD"
+        return val % 1 === 0 ? val.toFixed(0) : val.toFixed(2);
     };
 
     return (
@@ -126,6 +129,16 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                         <p className="text-[#A5B4FC] text-xs md:text-sm mt-2 font-medium leading-relaxed max-w-md">
                             Enter amount in <span className="text-white font-bold">ANY Currency</span>. We'll find the best USD card combo for your region!
                         </p>
+                        
+                        {/* HELPFUL DISCLAIMER */}
+                        <div className="mt-3 bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 flex gap-3 items-start max-w-lg">
+                            <div className="min-w-[16px] pt-0.5">
+                                <i className="fas fa-lightbulb text-yellow-400 text-xs"></i>
+                            </div>
+                            <p className="text-[11px] text-gray-300 leading-relaxed">
+                                <span className="text-white font-bold">Recommendation:</span> Exchange rates vary slightly. Add <span className="text-[#16C7D9] font-bold">0.10 - 0.20</span> to your target to ensure you fully cover the game price.
+                            </p>
+                        </div>
                     </div>
                     {/* Watermark Icon - Faded in background */}
                     <i className="fas fa-calculator text-white text-5xl md:text-7xl opacity-5 absolute top-4 right-6 rotate-12 pointer-events-none"></i>
