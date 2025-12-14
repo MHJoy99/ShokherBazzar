@@ -117,48 +117,49 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
             style={{ background: 'linear-gradient(180deg, #1A1440 0%, #241C5A 100%)' }}
         >
              {/* Header */}
-            <div className="p-6 md:p-8 relative z-10">
+            <div className="p-5 md:p-8 relative z-10">
                 <div className="flex justify-between items-start mb-6">
                     <div>
-                        <h3 className="text-white font-black text-xl italic uppercase flex items-center gap-2 tracking-wide">
+                        <h3 className="text-white font-black text-lg md:text-xl italic uppercase flex items-center gap-2 tracking-wide">
                             <i className="fas fa-pen text-yellow-400 text-sm"></i> SMART CALCULATOR
                         </h3>
-                        <p className="text-[#A5B4FC] text-sm mt-2 font-medium leading-relaxed max-w-md">
+                        <p className="text-[#A5B4FC] text-xs md:text-sm mt-2 font-medium leading-relaxed max-w-md">
                             Enter amount in <span className="text-white font-bold">ANY Currency</span>. We'll find the best USD card combo for your region!
                         </p>
                     </div>
                     {/* Watermark Icon - Faded in background */}
-                    <i className="fas fa-calculator text-white text-7xl opacity-5 absolute top-4 right-6 rotate-12 pointer-events-none"></i>
+                    <i className="fas fa-calculator text-white text-5xl md:text-7xl opacity-5 absolute top-4 right-6 rotate-12 pointer-events-none"></i>
                 </div>
 
                 {/* Input Row */}
-                <div className="flex flex-col sm:flex-row gap-4 mb-3 relative z-10 items-stretch">
-                    {/* Currency Select */}
-                    <div className="relative min-w-[140px] group">
-                        <div className="absolute inset-0 bg-[#0B1020] border border-[#3E3B5E] rounded-xl flex items-center px-4 pointer-events-none transition-all group-focus-within:border-[#16C7D9] group-focus-within:shadow-[0_0_15px_rgba(22,199,217,0.3)]">
-                            <span className="mr-3 text-lg">{CURRENCY_MAP[selectedCurrency]?.flag}</span>
-                            <span className="text-white font-bold">{selectedCurrency}</span>
-                            <i className="fas fa-chevron-down text-gray-500 ml-auto text-xs"></i>
+                <div className="flex flex-col sm:flex-row gap-3 md:gap-4 mb-3 relative z-10 items-stretch">
+                    {/* Currency Select - FIXED VISIBILITY */}
+                    <div className="relative w-full sm:w-auto min-w-[120px] md:min-w-[140px]">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none z-10 flex items-center gap-2">
+                            <span className="text-lg leading-none">{CURRENCY_MAP[selectedCurrency]?.flag}</span>
                         </div>
                         <select 
                             value={selectedCurrency}
                             onChange={(e) => setSelectedCurrency(e.target.value)}
-                            className="w-full h-14 opacity-0 cursor-pointer relative z-10"
+                            className="w-full h-12 md:h-14 bg-[#0B1020] border border-[#3E3B5E] rounded-xl pl-12 pr-10 text-white font-bold text-base focus:border-[#16C7D9] focus:shadow-[0_0_15px_rgba(22,199,217,0.3)] outline-none appearance-none cursor-pointer transition-all"
                         >
                             {Object.entries(CURRENCY_MAP).map(([code, info]) => (
-                                <option key={code} value={code}>{code}</option>
+                                <option key={code} value={code} className="bg-[#0B1020] text-white py-2">
+                                    {code}
+                                </option>
                             ))}
                         </select>
+                        <i className="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-xs pointer-events-none"></i>
                     </div>
 
                     {/* Input Field */}
-                    <div className="flex-1 relative">
+                    <div className="flex-1 relative w-full">
                          <input 
                             type="number" 
                             value={target}
                             onChange={(e) => setTarget(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleCalculate()}
-                            className="w-full h-14 bg-[#0B1020] border border-[#3E3B5E] rounded-xl px-6 text-white font-bold text-xl focus:border-[#16C7D9] focus:shadow-[0_0_15px_rgba(22,199,217,0.3)] outline-none placeholder:text-gray-600 transition-all"
+                            className="w-full h-12 md:h-14 bg-[#0B1020] border border-[#3E3B5E] rounded-xl px-4 md:px-6 text-white font-bold text-lg md:text-xl focus:border-[#16C7D9] focus:shadow-[0_0_15px_rgba(22,199,217,0.3)] outline-none placeholder:text-gray-600 transition-all"
                             placeholder="300"
                         />
                     </div>
@@ -167,7 +168,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                     <button 
                         onClick={handleCalculate}
                         disabled={loadingCalc}
-                        className="h-14 px-8 bg-[#16C7D9] hover:bg-[#13b0c1] text-[#0B1020] font-black uppercase tracking-wider rounded-xl transition-all hover:shadow-[0_0_20px_rgba(22,199,217,0.5)] hover:-translate-y-0.5 active:scale-95 flex items-center justify-center min-w-[140px] text-sm"
+                        className="h-12 md:h-14 px-8 bg-[#16C7D9] hover:bg-[#13b0c1] text-[#0B1020] font-black uppercase tracking-wider rounded-xl transition-all hover:shadow-[0_0_20px_rgba(22,199,217,0.5)] hover:-translate-y-0.5 active:scale-95 flex items-center justify-center min-w-[120px] md:min-w-[140px] text-sm w-full sm:w-auto"
                     >
                         {loadingCalc ? <i className="fas fa-spinner fa-spin"></i> : 'CALCULATE'}
                     </button>
@@ -191,20 +192,20 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="bg-[#0f0c29]/40 backdrop-blur-sm border-t border-white/5 px-6 md:px-8 py-8"
+                        className="bg-[#0f0c29]/40 backdrop-blur-sm border-t border-white/5 px-5 py-6 md:px-8 md:py-8"
                     >
-                        <div className="flex flex-col sm:flex-row justify-between items-end gap-6 mb-8">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 mb-8">
                             {/* Left: What You Get */}
-                            <div className="flex-1">
+                            <div className="flex-1 w-full">
                                 <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1">YOU GET (APPROX)</p>
                                 <div className="flex items-baseline gap-2 mb-3">
-                                    <span className="text-5xl font-black text-white leading-none tracking-tight">{getApproxValue()}</span>
-                                    <span className="text-2xl font-bold text-gray-500">{selectedCurrency}</span>
+                                    <span className="text-4xl md:text-5xl font-black text-white leading-none tracking-tight">{getApproxValue()}</span>
+                                    <span className="text-xl md:text-2xl font-bold text-gray-500">{selectedCurrency}</span>
                                 </div>
                                 
                                 <div className="flex flex-wrap gap-2 mb-2">
                                     {result.items.map((item: any, idx: number) => (
-                                        <div key={idx} className="bg-[#2E2B4F] text-white text-xs font-bold px-3 py-1.5 rounded flex items-center gap-2 border border-[#4C4675] shadow-lg">
+                                        <div key={idx} className="bg-[#2E2B4F] text-white text-[10px] md:text-xs font-bold px-3 py-1.5 rounded flex items-center gap-2 border border-[#4C4675] shadow-lg">
                                             <i className="fas fa-dollar-sign text-[#A5B4FC] text-[10px]"></i> 
                                             {item.denomination}
                                             {item.quantity > 1 && <span className="bg-white/10 px-1.5 rounded text-[10px] text-gray-300 ml-1">x{item.quantity}</span>}
@@ -215,10 +216,10 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                             </div>
 
                             {/* Right: Your Price */}
-                            <div className="text-right">
+                            <div className="text-left sm:text-right w-full sm:w-auto mt-2 sm:mt-0 pt-4 sm:pt-0 border-t sm:border-t-0 border-white/5">
                                 <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1">YOUR PRICE</p>
-                                <div className="text-5xl font-black text-[#16C7D9] tracking-tighter drop-shadow-[0_0_15px_rgba(22,199,217,0.2)]">
-                                    <span className="text-3xl align-top opacity-80 mr-1">৳</span>{result.totalBDT}
+                                <div className="text-4xl md:text-5xl font-black text-[#16C7D9] tracking-tighter drop-shadow-[0_0_15px_rgba(22,199,217,0.2)]">
+                                    <span className="text-2xl md:text-3xl align-top opacity-80 mr-1">৳</span>{result.totalBDT}
                                 </div>
                             </div>
                         </div>
@@ -226,9 +227,9 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                         {/* Add to Cart Button */}
                         <button 
                             onClick={handleAddBundle}
-                            className="w-full bg-[#22c55e] hover:bg-[#16a34a] text-black font-black uppercase py-4 rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:shadow-[0_0_30px_rgba(34,197,94,0.5)] transition-all transform active:scale-[0.98] flex items-center justify-center gap-3 tracking-wider text-base hover:-translate-y-0.5"
+                            className="w-full bg-[#22c55e] hover:bg-[#16a34a] text-black font-black uppercase py-4 rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:shadow-[0_0_30px_rgba(34,197,94,0.5)] transition-all transform active:scale-[0.98] flex items-center justify-center gap-3 tracking-wider text-sm md:text-base hover:-translate-y-0.5"
                         >
-                            <i className="fas fa-shopping-cart text-lg"></i> ADD BUNDLE TO CART
+                            <i className="fas fa-shopping-cart text-base md:text-lg"></i> ADD BUNDLE TO CART
                         </button>
                     </motion.div>
                 )}
