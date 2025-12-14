@@ -39,7 +39,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
         
         // Strict Validation to avoid 400 Bad Request
         if (isNaN(rawVal) || rawVal <= 0) {
-            setError("Please enter a valid price (e.g. 10.50)");
+            setError("Please enter a valid amount.");
             setResult(null);
             return;
         }
@@ -103,152 +103,167 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
     };
 
     return (
-        <div className="bg-dark-900 border border-white/10 rounded-2xl p-5 mb-8 shadow-xl relative overflow-hidden">
-             {/* Background decoration */}
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/5 rounded-full blur-2xl pointer-events-none"></div>
+        <div className="relative group mb-10">
+            {/* GLOWING GRADIENT BORDER CONTAINER */}
+            <div className="absolute -inset-[2px] bg-gradient-to-r from-primary via-purple-500 to-blue-600 rounded-2xl opacity-75 group-hover:opacity-100 blur-sm transition-opacity duration-1000 animate-pulse-slow"></div>
             
-            <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary border border-primary/20 shrink-0">
-                         <i className="fas fa-magic"></i>
+            <div className="relative bg-dark-950 rounded-2xl p-6 overflow-hidden">
+                {/* Background Tech Mesh */}
+                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none"></div>
+                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-[80px] pointer-events-none"></div>
+
+                {/* HEADER */}
+                <div className="flex items-center gap-4 mb-6 relative z-10">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-dark-800 to-black border border-white/10 flex items-center justify-center shadow-lg">
+                        <i className="fas fa-microchip text-2xl text-primary drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]"></i>
                     </div>
                     <div>
-                        <h3 className="text-lg font-black text-white uppercase italic tracking-wide">Custom Amount</h3>
-                        <p className="text-gray-400 text-xs">Enter exact amount (e.g. 10.50), we build the bundle.</p>
+                        <h3 className="text-xl font-black text-white uppercase italic tracking-wider flex items-center gap-2">
+                            Custom Loadout <span className="hidden sm:inline-block text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded border border-primary/30 not-italic">BETA</span>
+                        </h3>
+                        <p className="text-gray-400 text-xs font-medium">Buying a game for <span className="text-white font-bold">$18.49</span>? Don't overpay. Build exact amount.</p>
                     </div>
                 </div>
 
-                {/* Input Group - Mobile Optimized */}
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 mb-2">
-                    {/* Currency */}
-                    <div className="sm:col-span-3 relative">
+                {/* INPUT DASHBOARD */}
+                <div className="bg-dark-900/50 rounded-xl p-2 border border-white/5 flex flex-col sm:flex-row gap-2 relative z-10">
+                    {/* Currency Select */}
+                    <div className="relative min-w-[120px]">
                         <select 
                             value={selectedCurrency}
                             onChange={(e) => setSelectedCurrency(e.target.value)}
-                            className="w-full bg-dark-950 border border-white/10 rounded-lg h-12 pl-3 pr-8 text-white font-bold text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none appearance-none cursor-pointer transition-colors"
+                            className="w-full h-14 bg-dark-950 border border-white/10 rounded-lg pl-4 pr-8 text-white font-bold text-sm focus:border-primary focus:shadow-[0_0_15px_rgba(6,182,212,0.3)] outline-none appearance-none cursor-pointer transition-all"
                         >
                             {Object.entries(CURRENCY_MAP).map(([code, info]) => (
                                 <option key={code} value={code}>{info.flag} {code}</option>
                             ))}
                         </select>
-                        <i className="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs pointer-events-none"></i>
+                        <i className="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-xs pointer-events-none"></i>
                     </div>
 
-                    {/* Amount */}
-                    <div className="sm:col-span-6 relative">
+                    {/* Amount Input */}
+                    <div className="relative flex-1">
                         <input 
                             type="number" 
                             step="0.01" 
                             value={target}
                             onChange={(e) => setTarget(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleCalculate()}
-                            placeholder="Amount"
-                            className="w-full bg-dark-950 border border-white/10 rounded-lg h-12 px-4 text-white font-mono font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+                            placeholder="Enter Amount (e.g. 10.50)"
+                            className="w-full h-14 bg-dark-950 border border-white/10 rounded-lg px-4 text-white font-mono text-lg font-bold focus:border-primary focus:shadow-[0_0_15px_rgba(6,182,212,0.3)] outline-none transition-all placeholder:text-gray-600"
                         />
-                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-xs font-bold uppercase pointer-events-none">
-                            {selectedCurrency}
-                        </span>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 font-bold uppercase tracking-widest pointer-events-none">
+                            VAL
+                        </div>
                     </div>
 
-                    {/* Button */}
-                    <div className="sm:col-span-3">
-                        <button 
-                            onClick={handleCalculate}
-                            disabled={loadingCalc}
-                            className="w-full h-12 bg-white/10 hover:bg-white/20 text-white font-bold uppercase rounded-lg transition-colors border border-white/5 active:scale-95 flex items-center justify-center gap-2"
-                        >
-                            {loadingCalc ? <i className="fas fa-spinner fa-spin"></i> : <span>Build</span>}
-                        </button>
-                    </div>
+                    {/* Action Button */}
+                    <button 
+                        onClick={handleCalculate}
+                        disabled={loadingCalc}
+                        className="h-14 sm:w-40 bg-white text-black font-black uppercase tracking-wider rounded-lg hover:bg-primary hover:scale-[1.02] active:scale-95 transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:scale-100"
+                    >
+                        {loadingCalc ? <i className="fas fa-circle-notch fa-spin"></i> : <><i className="fas fa-bolt"></i> Build</>}
+                    </button>
                 </div>
                 
-                {error && <p className="text-red-400 text-xs font-bold mt-2 ml-1 animate-fade-in-up"><i className="fas fa-exclamation-circle"></i> {error}</p>}
-
-                {/* RESULT SECTION */}
-                <AnimatePresence>
-                {result && (
-                    <motion.div 
-                        initial={{ opacity: 0, y: 10 }} 
-                        animate={{ opacity: 1, y: 0 }} 
-                        exit={{ opacity: 0, height: 0 }}
-                        className="mt-6 bg-black/40 rounded-xl border border-primary/30 overflow-hidden shadow-2xl"
-                    >
-                        {/* Status Bar */}
-                        <div className="bg-primary/10 px-4 py-3 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
-                             <span className="text-primary text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
-                                 <i className="fas fa-check"></i> Bundle Ready
-                             </span>
-                             {/* Conversion info */}
-                             {result.requestedCurrency !== result.currency && (
-                                 <span className="text-blue-400 text-[10px] font-mono bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-                                     {result.requestedAmount} {result.requestedCurrency} ≈ {result.convertedAmount} {result.currency}
-                                 </span>
-                             )}
-                        </div>
-
-                        <div className="p-4 sm:p-5">
-                             {/* Match Warning */}
-                             {result.matchType === 'closest' && (
-                                 <div className="mb-5 bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-lg flex gap-3 items-start">
-                                     <i className="fas fa-exclamation-triangle text-yellow-500 text-sm mt-0.5 shrink-0"></i>
-                                     <div>
-                                         <p className="text-yellow-500 text-xs font-bold uppercase mb-1">Closest Match Found</p>
-                                         <p className="text-gray-400 text-[11px] leading-relaxed">
-                                             Exact amount not available. We built a bundle for <strong className="text-white">{result.actualAmount} {result.currency}</strong> instead.
-                                         </p>
-                                     </div>
-                                 </div>
-                             )}
-
-                             {/* Visual Cards (Horizontal Scroll on Mobile, Grid on Desktop) */}
-                             <div className="mb-6">
-                                 <p className="text-[10px] text-gray-500 font-bold uppercase mb-3 tracking-widest">You will receive these codes:</p>
-                                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
-                                     {result.items.map((item: any, idx: number) => (
-                                         <div key={idx} className="snap-start shrink-0 min-w-[130px] bg-dark-800 rounded-lg p-3 border border-white/10 flex flex-col gap-2 relative group hover:border-primary/50 transition-colors">
-                                             <div className="flex justify-between items-start">
-                                                 <span className="text-[9px] text-gray-500 uppercase font-bold">Code</span>
-                                                 <span className="bg-white/10 text-white text-[10px] px-1.5 rounded font-bold">x{item.quantity}</span>
-                                             </div>
-                                             <div className="flex items-center gap-2 mt-1">
-                                                 <div className="w-8 h-8 rounded bg-dark-950 flex items-center justify-center text-gray-400 border border-white/5 shadow-inner">
-                                                     <i className="fas fa-gift text-sm"></i>
-                                                 </div>
-                                                 <div>
-                                                     <p className="text-white font-black text-lg leading-none">{item.denomination}</p>
-                                                     <p className="text-[9px] text-gray-500 uppercase font-bold">{result.currency}</p>
-                                                 </div>
-                                             </div>
-                                         </div>
-                                     ))}
-                                 </div>
-                             </div>
-
-                             {/* Pricing & CTA Block - Dedicated Section */}
-                             <div className="bg-white/5 rounded-xl p-4 border border-white/5">
-                                 <div className="flex items-end justify-between mb-4">
-                                     <div>
-                                         <p className="text-gray-400 text-[10px] font-bold uppercase mb-1">Total Bundle Price</p>
-                                         <div className="flex items-center gap-2">
-                                            <span className="text-green-500 text-[10px] font-bold bg-green-500/10 px-2 py-0.5 rounded uppercase tracking-wider"><i className="fas fa-bolt"></i> Instant</span>
-                                         </div>
-                                     </div>
-                                     <div className="text-right">
-                                         <span className="block text-3xl font-black text-primary tracking-tight leading-none">৳{result.totalBDT}</span>
-                                     </div>
-                                 </div>
-                                 
-                                 <button 
-                                     onClick={handleAddBundle}
-                                     className="w-full bg-primary hover:bg-primary-hover text-black font-black uppercase py-4 rounded-xl shadow-glow transition-transform active:scale-95 flex items-center justify-center gap-2 text-sm"
-                                 >
-                                     <span>Add Bundle To Cart</span>
-                                     <i className="fas fa-arrow-right"></i>
-                                 </button>
-                             </div>
-                        </div>
+                {error && (
+                    <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mt-3 ml-1 text-red-400 text-xs font-bold flex items-center gap-2">
+                        <i className="fas fa-exclamation-circle"></i> {error}
                     </motion.div>
                 )}
+
+                {/* RESULTS - LOOT CRATE STYLE */}
+                <AnimatePresence mode='wait'>
+                    {result && (
+                        <motion.div 
+                            key="result-box"
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+                            animate={{ opacity: 1, scale: 1, y: 0 }} 
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ type: "spring", bounce: 0.4 }}
+                            className="mt-6 bg-gradient-to-b from-dark-900 to-black rounded-xl border border-primary/20 overflow-hidden relative shadow-2xl"
+                        >
+                             {/* Decorative Top Line */}
+                             <div className="h-1 w-full bg-gradient-to-r from-primary via-purple-500 to-primary"></div>
+
+                             {/* Header Info */}
+                             <div className="p-4 border-b border-white/5 flex flex-wrap justify-between items-center gap-3 bg-white/5 backdrop-blur-sm">
+                                 <div className="flex items-center gap-2">
+                                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                     <span className="text-green-500 font-bold uppercase text-[10px] tracking-widest">System Optimized</span>
+                                 </div>
+                                 {result.requestedCurrency !== result.currency && (
+                                     <div className="px-3 py-1 rounded-full bg-dark-950 border border-white/10 text-xs font-mono text-gray-300">
+                                         {result.requestedAmount} <span className="text-gray-500">{result.requestedCurrency}</span> <i className="fas fa-arrow-right text-[10px] mx-1"></i> <span className="text-white font-bold">{result.convertedAmount}</span> <span className="text-primary">{result.currency}</span>
+                                     </div>
+                                 )}
+                             </div>
+
+                             <div className="p-6">
+                                 {/* Warning / Info Box */}
+                                 {result.matchType === 'closest' && (
+                                     <div className="mb-6 bg-yellow-500/5 border-l-2 border-yellow-500 pl-4 py-2">
+                                         <h4 className="text-yellow-500 font-bold text-xs uppercase mb-1">Closest Match Found</h4>
+                                         <p className="text-gray-400 text-[11px]">Exact amount unavailable. Optimized bundle: <strong className="text-white">{result.actualAmount} {result.currency}</strong></p>
+                                     </div>
+                                 )}
+
+                                 {/* LOOT ITEMS GRID */}
+                                 <div className="mb-8">
+                                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3 pl-1">Inventory Generated:</p>
+                                     <div className="flex flex-wrap gap-3">
+                                         {result.items.map((item: any, idx: number) => (
+                                             <motion.div 
+                                                key={idx}
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ delay: idx * 0.1 }}
+                                                className="relative group w-28 aspect-[3/4] bg-dark-800 rounded-lg border border-white/10 hover:border-primary/50 transition-all overflow-hidden shadow-lg flex flex-col items-center justify-center p-2"
+                                             >
+                                                 {/* Quantity Badge */}
+                                                 <div className="absolute top-2 right-2 bg-white/10 text-white text-[10px] font-black px-1.5 py-0.5 rounded backdrop-blur-md border border-white/10 z-10">
+                                                     x{item.quantity}
+                                                 </div>
+                                                 
+                                                 {/* Icon */}
+                                                 <div className="w-10 h-10 mb-2 rounded-full bg-gradient-to-br from-primary/20 to-purple-500/20 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
+                                                     <i className="fas fa-gift"></i>
+                                                 </div>
+                                                 
+                                                 {/* Value */}
+                                                 <div className="text-center">
+                                                     <div className="text-xl font-black text-white leading-none">{item.denomination}</div>
+                                                     <div className="text-[9px] font-bold text-gray-500 uppercase mt-1">{result.currency}</div>
+                                                 </div>
+                                                 
+                                                 {/* Shine Effect */}
+                                                 <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+                                             </motion.div>
+                                         ))}
+                                     </div>
+                                 </div>
+
+                                 {/* FOOTER ACTION */}
+                                 <div className="flex flex-col sm:flex-row items-end sm:items-center justify-between gap-4 pt-6 border-t border-white/5">
+                                     <div>
+                                         <p className="text-gray-500 text-[10px] uppercase font-bold tracking-widest mb-1">Total Bundle Price</p>
+                                         <div className="flex items-baseline gap-2">
+                                            <span className="text-4xl font-black text-white tracking-tighter drop-shadow-lg">৳{result.totalBDT}</span>
+                                            <span className="text-[10px] text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded border border-green-400/20 uppercase">Instant</span>
+                                         </div>
+                                     </div>
+                                     <button 
+                                         onClick={handleAddBundle}
+                                         className="w-full sm:w-auto px-8 h-14 bg-gradient-to-r from-primary to-blue-600 hover:from-white hover:to-white hover:text-black text-white font-black uppercase tracking-wider rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(255,255,255,0.4)] transition-all transform active:scale-95 flex items-center justify-center gap-3 text-sm"
+                                     >
+                                         <span>Add To Cart</span>
+                                         <i className="fas fa-arrow-right"></i>
+                                     </button>
+                                 </div>
+                             </div>
+                        </motion.div>
+                    )}
                 </AnimatePresence>
             </div>
         </div>
