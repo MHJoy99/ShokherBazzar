@@ -124,20 +124,24 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                             Enter amount in <span className="text-white font-bold">ANY Currency</span>. We'll find the best USD card combo for your region!
                         </p>
                     </div>
-                    <i className="fas fa-calculator text-gray-700 text-4xl opacity-50 transform rotate-12"></i>
+                    {/* Watermark Icon */}
+                    <i className="fas fa-calculator text-gray-700 text-5xl opacity-20 absolute top-4 right-6 rotate-12 pointer-events-none"></i>
                 </div>
 
                 {/* Input Row */}
-                <div className="flex flex-col sm:flex-row gap-3 mb-2">
+                <div className="flex flex-col sm:flex-row gap-3 mb-2 relative z-10">
                     {/* Currency Select */}
-                    <div className="relative min-w-[130px]">
+                    <div className="relative min-w-[140px]">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-white font-bold text-sm pointer-events-none z-10">
+                            {CURRENCY_MAP[selectedCurrency]?.flag}
+                        </div>
                         <select 
                             value={selectedCurrency}
                             onChange={(e) => setSelectedCurrency(e.target.value)}
-                            className="w-full h-12 bg-[#13111c] border border-white/10 rounded-lg pl-3 pr-8 text-white font-bold text-sm focus:border-primary outline-none appearance-none cursor-pointer"
+                            className="w-full h-12 bg-[#13111c] border border-white/10 rounded-lg pl-10 pr-8 text-white font-bold text-sm focus:border-primary outline-none appearance-none cursor-pointer"
                         >
                             {Object.entries(CURRENCY_MAP).map(([code, info]) => (
-                                <option key={code} value={code}>{info.flag} {code}</option>
+                                <option key={code} value={code}>{code}</option>
                             ))}
                         </select>
                         <i className="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs pointer-events-none"></i>
@@ -150,7 +154,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                             value={target}
                             onChange={(e) => setTarget(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleCalculate()}
-                            className="w-full h-12 bg-[#13111c] border border-white/10 rounded-lg px-4 text-white font-black text-lg focus:border-primary outline-none"
+                            className="w-full h-12 bg-[#13111c] border border-white/10 rounded-lg px-4 text-white font-black text-lg focus:border-primary outline-none placeholder:text-gray-700"
                             placeholder="300"
                         />
                     </div>
@@ -159,7 +163,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                     <button 
                         onClick={handleCalculate}
                         disabled={loadingCalc}
-                        className="h-12 px-6 bg-primary hover:bg-cyan-400 text-black font-black uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center min-w-[120px]"
+                        className="h-12 px-8 bg-primary hover:bg-cyan-400 text-black font-black uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center min-w-[140px] shadow-glow-sm"
                     >
                         {loadingCalc ? <i className="fas fa-spinner fa-spin"></i> : 'CALCULATE'}
                     </button>
@@ -173,7 +177,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                     </div>
                 )}
                 
-                {error && <p className="text-red-400 text-xs font-bold mt-2"><i className="fas fa-exclamation-circle"></i> {error}</p>}
+                {error && <p className="text-red-400 text-xs font-bold mt-2 animate-pulse"><i className="fas fa-exclamation-circle"></i> {error}</p>}
             </div>
 
             {/* Results Section */}
@@ -183,22 +187,22 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="bg-[#13111c] border-t border-white/5 px-6 py-6"
+                        className="bg-[#151221] border-t border-white/5 px-6 py-6"
                     >
-                        <div className="flex flex-col sm:flex-row justify-between items-end gap-6 mb-6">
+                        <div className="flex flex-col sm:flex-row justify-between items-end gap-6 mb-8">
                             {/* Left: What You Get */}
-                            <div>
+                            <div className="flex-1">
                                 <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">YOU GET (APPROX)</p>
-                                <div className="text-3xl font-black text-white leading-none mb-3">
-                                    {getApproxValue()} <span className="text-xl text-gray-400">{selectedCurrency}</span>
+                                <div className="text-4xl font-black text-white leading-none mb-3">
+                                    {getApproxValue()} <span className="text-2xl text-gray-500">{selectedCurrency}</span>
                                 </div>
                                 
                                 <div className="flex flex-wrap gap-2 mb-2">
                                     {result.items.map((item: any, idx: number) => (
-                                        <div key={idx} className="bg-[#2e2b40] text-white text-xs font-bold px-3 py-1.5 rounded flex items-center gap-2 border border-white/5">
+                                        <div key={idx} className="bg-[#2a273f] text-white text-xs font-bold px-3 py-1.5 rounded flex items-center gap-2 border border-white/10">
                                             <i className="fas fa-dollar-sign text-gray-400 text-[10px]"></i> 
                                             {item.denomination}
-                                            {item.quantity > 1 && <span className="text-gray-400 text-[10px] ml-1">x{item.quantity}</span>}
+                                            {item.quantity > 1 && <span className="bg-white/10 px-1.5 rounded text-[10px] text-gray-300 ml-1">x{item.quantity}</span>}
                                         </div>
                                     ))}
                                 </div>
@@ -208,8 +212,8 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                             {/* Right: Your Price */}
                             <div className="text-right">
                                 <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">YOUR PRICE</p>
-                                <div className="text-4xl font-black text-primary tracking-tighter">
-                                    <span className="text-2xl align-top">৳</span>{result.totalBDT}
+                                <div className="text-4xl font-black text-primary tracking-tighter drop-shadow-lg">
+                                    <span className="text-2xl align-top opacity-80">৳</span>{result.totalBDT}
                                 </div>
                             </div>
                         </div>
@@ -217,7 +221,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                         {/* Add to Cart Button */}
                         <button 
                             onClick={handleAddBundle}
-                            className="w-full bg-green-500 hover:bg-green-600 text-white font-black uppercase py-4 rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2 tracking-wide text-sm md:text-base"
+                            className="w-full bg-green-500 hover:bg-green-400 text-black font-black uppercase py-4 rounded-xl shadow-lg hover:shadow-green-500/20 transition-all transform active:scale-95 flex items-center justify-center gap-3 tracking-wider text-base"
                         >
                             <i className="fas fa-shopping-cart"></i> ADD BUNDLE TO CART
                         </button>
