@@ -102,6 +102,22 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
         setTarget('');
     };
 
+    // HELPER: Calculate equivalent value in user's selected currency
+    // This runs purely on frontend using CURRENCY_MAP fallback rates
+    const getUserCurrencyEquivalent = () => {
+        if (!result) return null;
+        if (selectedCurrency === 'USD') return null; // No need to convert if already USD
+        
+        const rate = CURRENCY_MAP[selectedCurrency]?.fallback || 1;
+        // result.actualAmount is usually in USD (e.g. 0.85)
+        // 0.85 * 41.60 = ~35.36 UAH
+        const approxValue = (result.actualAmount * rate).toFixed(2);
+        
+        return `${approxValue} ${selectedCurrency}`;
+    };
+
+    const userEquivalent = getUserCurrencyEquivalent();
+
     return (
         <div className="relative group mb-10">
             {/* GLOWING GRADIENT BORDER CONTAINER */}
@@ -193,11 +209,12 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                                      <span className="text-green-500 font-bold uppercase text-[10px] tracking-widest">System Optimized</span>
                                  </div>
-                                 {result.requestedCurrency !== result.currency && (
-                                     <div className="px-3 py-1 rounded-full bg-dark-950 border border-white/10 text-xs font-mono text-gray-300">
-                                         {result.requestedAmount} <span className="text-gray-500">{result.requestedCurrency}</span> <i className="fas fa-arrow-right text-[10px] mx-1"></i> <span className="text-white font-bold">{result.convertedAmount}</span> <span className="text-primary">{result.currency}</span>
-                                     </div>
-                                 )}
+                                 <div className="px-3 py-1 rounded-full bg-dark-950 border border-white/10 text-xs font-mono text-gray-300 flex items-center gap-2">
+                                     {/* Show requested vs actual */}
+                                     <span>Req: <span className="text-white">{result.requestedAmount} {selectedCurrency}</span></span>
+                                     <i className="fas fa-arrow-right text-[10px] text-gray-600"></i>
+                                     <span className="text-primary font-bold">Get: {result.actualAmount} {result.currency}</span>
+                                 </div>
                              </div>
 
                              <div className="p-6">
@@ -205,7 +222,15 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                                  {result.matchType === 'closest' && (
                                      <div className="mb-6 bg-yellow-500/5 border-l-2 border-yellow-500 pl-4 py-2">
                                          <h4 className="text-yellow-500 font-bold text-xs uppercase mb-1">Closest Match Found</h4>
-                                         <p className="text-gray-400 text-[11px]">Exact amount unavailable. Optimized bundle: <strong className="text-white">{result.actualAmount} {result.currency}</strong></p>
+                                         <p className="text-gray-400 text-[11px]">
+                                             We couldn't make exactly {result.requestedAmount} {selectedCurrency}. 
+                                             This bundle gives you <strong className="text-white">{result.actualAmount} {result.currency}</strong>
+                                             {userEquivalent && (
+                                                 <span className="text-yellow-500 ml-1">
+                                                     (approx. ≈ {userEquivalent})
+                                                 </span>
+                                             )}.
+                                         </p>
                                      </div>
                                  )}
 
