@@ -147,8 +147,8 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                             </div>
                             <div className="flex-1">
                                 <span className="text-white text-xs font-black uppercase tracking-wider block mb-1">Pro Tip</span>
-                                <p className="text-xs text-gray-300 leading-snug">
-                                    Add <span className="text-[#16C7D9] font-bold">0.10 - 0.20</span> extra to your target to ensure full coverage for exchange rates.
+                                <p className="text-[11px] text-gray-300 leading-snug">
+                                    Due to currency fluctuations, you may receive slightly less or more. Always add <span className="text-[#16C7D9] font-bold">0.10 - 0.20</span> to your target to ensure you fully cover the price.
                                 </p>
                             </div>
                         </div>
