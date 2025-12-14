@@ -96,3 +96,19 @@ export interface Order {
       downloads?: OrderDownload[]; // For downloadable files
   }[];
 }
+
+// --- NEW: EXCHANGE RATE API TYPES ---
+export interface ExchangeRateData {
+  to_bdt: string;
+  to_usd: string;
+  symbol: string;
+  name: string;
+  usd_rate: string; // "90.29"
+}
+
+export interface ExchangeRatesResponse {
+  success: boolean;
+  base_currency: string;
+  timestamp: string;
+  display_rates: Record<string, ExchangeRateData>;
+}

@@ -1,5 +1,5 @@
 
-import { Product, Category, Order, User, OrderNote, Coupon } from '../types';
+import { Product, Category, Order, User, OrderNote, Coupon, ExchangeRatesResponse } from '../types';
 import { config } from '../config';
 
 // UPDATED BACKEND DOMAINS
@@ -298,6 +298,44 @@ export const api = {
       } catch (error) {
           console.error("calculateBundle Exception:", error);
           throw error;
+      }
+  },
+
+  // --- NEW: EXCHANGE RATES FETCHING ---
+  getExchangeRates: async (): Promise<ExchangeRatesResponse | null> => {
+      const CACHE_KEY = 'mhjoy_exchange_rates';
+      const CACHE_TIME_KEY = 'mhjoy_rates_cached_at';
+      const CACHE_DURATION = 60 * 60 * 1000; // 1 Hour
+
+      try {
+          // 1. Check LocalStorage Cache
+          const cached = localStorage.getItem(CACHE_KEY);
+          const cacheTime = localStorage.getItem(CACHE_TIME_KEY);
+
+          if (cached && cacheTime) {
+              const age = Date.now() - parseInt(cacheTime);
+              if (age < CACHE_DURATION) {
+                  return JSON.parse(cached) as ExchangeRatesResponse;
+              }
+          }
+
+          // 2. Fetch Fresh Data
+          const response = await fetch(`${CUSTOM_API_URL}/exchange-rates`);
+          if (!response.ok) throw new Error("Failed to fetch rates");
+          
+          const data: ExchangeRatesResponse = await response.json();
+          
+          if (data.success) {
+              // Update Cache
+              localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+              localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
+              return data;
+          }
+          return null;
+
+      } catch (e) {
+          console.warn("Exchange Rate Fetch Failed, using fallback:", e);
+          return null;
       }
   },
 

@@ -11,28 +11,63 @@ import { config } from '../config';
 import { SkeletonCard } from '../components/Skeleton';
 import { ProductCard } from '../components/ProductCard';
 
-// --- CONFIG: SUPPORTED CURRENCIES & FALLBACK RATES ---
-const CURRENCY_MAP: Record<string, { label: string; flag: string; fallback: number }> = {
-    USD: { label: "USD", flag: "🇺🇸", fallback: 1 },
-    GBP: { label: "GBP", flag: "🇬🇧", fallback: 0.79 }, // Great Britain
-    EUR: { label: "EUR", flag: "🇪🇺", fallback: 0.93 },  // Euro
-    UAH: { label: "UAH", flag: "🇺🇦", fallback: 41.60 }, // Ukraine
-    INR: { label: "INR", flag: "🇮🇳", fallback: 84.10 }, // India
-    TRY: { label: "TRY", flag: "🇹🇷", fallback: 34.25 }, // Turkey
-    ARS: { label: "ARS", flag: "🇦🇷", fallback: 980.50 }, // Argentina
-    BRL: { label: "BRL", flag: "🇧🇷", fallback: 5.75 },  // Brazil
-    PLN: { label: "PLN", flag: "🇵🇱", fallback: 3.96 },  // Poland
+// --- INITIAL CONFIG: SUPPORTED CURRENCIES & FALLBACK RATES ---
+// This acts as the "Structure" (Flags/Labels). Values are overwritten by API if available.
+const INITIAL_CURRENCY_MAP: Record<string, { label: string; flag: string; rate: number }> = {
+    USD: { label: "USD", flag: "🇺🇸", rate: 1 },
+    GBP: { label: "GBP", flag: "🇬🇧", rate: 0.79 }, 
+    EUR: { label: "EUR", flag: "🇪🇺", rate: 0.93 }, 
+    UAH: { label: "UAH", flag: "🇺🇦", rate: 41.60 }, 
+    INR: { label: "INR", flag: "🇮🇳", rate: 84.10 }, 
+    TRY: { label: "TRY", flag: "🇹🇷", rate: 34.25 }, 
+    ARS: { label: "ARS", flag: "🇦🇷", rate: 980.50 },
+    BRL: { label: "BRL", flag: "🇧🇷", rate: 5.75 }, 
+    PLN: { label: "PLN", flag: "🇵🇱", rate: 3.96 }, 
 };
 
 // SECURE GIFT CARD CALCULATOR USING BACKEND API
 const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }> = ({ variations, product }) => {
     const [target, setTarget] = useState<string>('');
-    const [selectedCurrency, setSelectedCurrency] = useState('UAH'); // Default to UAH as per screenshot
+    const [selectedCurrency, setSelectedCurrency] = useState('UAH'); 
+    
+    // STATE: Holds the merged currency data (Live + Fallback)
+    const [currencyData, setCurrencyData] = useState(INITIAL_CURRENCY_MAP);
+    const [ratesLoaded, setRatesLoaded] = useState(false);
+
     const [result, setResult] = useState<any | null>(null);
     const [loadingCalc, setLoadingCalc] = useState(false);
     const [error, setError] = useState('');
     const { addToCart } = useCart();
     const { showToast } = useToast();
+
+    // FETCH LIVE RATES ON MOUNT
+    useEffect(() => {
+        const loadRates = async () => {
+            const data = await api.getExchangeRates();
+            if (data && data.success && data.display_rates) {
+                setCurrencyData(prev => {
+                    const updated = { ...prev };
+                    Object.keys(updated).forEach(code => {
+                        // If API has data for this currency, update the rate
+                        if (data.display_rates[code]) {
+                            // "usd_rate" from API is the amount of THIS currency per 1 USD (e.g. "90.29" for INR)
+                            updated[code].rate = parseFloat(data.display_rates[code].usd_rate);
+                        }
+                    });
+                    return updated;
+                });
+                setRatesLoaded(true);
+            }
+        };
+        loadRates();
+    }, []);
+
+    const currentRate = currencyData[selectedCurrency]?.rate || 1;
+
+    // Reset result when currency changes
+    useEffect(() => {
+        setResult(null); 
+    }, [selectedCurrency]);
 
     const handleCalculate = async () => {
         const rawVal = parseFloat(target);
@@ -50,14 +85,17 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
             // SECURE CALL TO BACKEND
             const data = await api.calculateBundle(product.id, rawVal, selectedCurrency);
             
+            // Note: We don't need to manually update rate from this specific calculation anymore
+            // because we fetched global rates on mount. However, if the API returns 
+            // explicit conversion data, we trust it for the *result* display.
+
             setResult({
-                items: data.items, // Backend returns array of items with variationId, quantity, subtotalBDT
+                items: data.items, 
                 totalBDT: data.totalBDT,
                 calculationToken: data.calculationToken,
                 currency: data.currency,
                 requestedAmount: data.requestedAmount,
                 
-                // New Conversion Fields from Backend
                 requestedCurrency: data.requestedCurrency,
                 convertedAmount: data.convertedAmount,
                 actualAmount: data.actualAmount,
@@ -74,12 +112,8 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
     const handleAddBundle = () => {
         if(!result) return;
         
-        // Add items to cart with Security Token
         result.items.forEach((item: any) => {
-            // Find variation object to pass full data
             const variation = variations.find(v => v.id === item.variationId);
-            
-            // Safe conversion to avoid 'toString of undefined' error
             const priceOverride = (item.subtotalBDT !== undefined && item.subtotalBDT !== null) 
                 ? String(item.subtotalBDT) 
                 : "0";
@@ -88,10 +122,10 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                 product, 
                 item.quantity, 
                 variation, 
-                priceOverride, // Custom Price from Backend
+                priceOverride, 
                 {
                     token: result.calculationToken,
-                    currency: result.currency, // Store BASE currency (e.g. USD)
+                    currency: result.currency, 
                     timestamp: Date.now(),
                     originalDenom: item.denomination
                 }
@@ -105,12 +139,8 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
     // Calculate approx value for "YOU GET" display
     const getApproxValue = () => {
         if (!result) return '0';
-        const rate = CURRENCY_MAP[selectedCurrency]?.fallback || 1;
-        // result.actualAmount is in USD (e.g. 7.68)
-        // 7.68 * 1 = 7.68
-        const val = result.actualAmount * rate;
-        
-        // Show exact decimals if present (up to 2) to avoid misleading "8 USD" when it's "7.68 USD"
+        // result.actualAmount is in USD. Multiply by the current LIVE rate.
+        const val = result.actualAmount * currentRate;
         return val % 1 === 0 ? val.toFixed(0) : val.toFixed(2);
     };
 
@@ -163,14 +193,14 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                     {/* Currency Select */}
                     <div className="relative w-full sm:w-auto min-w-[120px] md:min-w-[150px]">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none z-10 flex items-center gap-2">
-                            <span className="text-xl leading-none">{CURRENCY_MAP[selectedCurrency]?.flag}</span>
+                            <span className="text-xl leading-none">{currencyData[selectedCurrency]?.flag}</span>
                         </div>
                         <select 
                             value={selectedCurrency}
                             onChange={(e) => setSelectedCurrency(e.target.value)}
                             className="w-full h-14 bg-dark-900 border border-white/10 rounded-xl pl-12 pr-10 text-white font-bold text-lg focus:border-[#16C7D9] focus:bg-dark-800 outline-none appearance-none cursor-pointer transition-all hover:border-white/20"
                         >
-                            {Object.entries(CURRENCY_MAP).map(([code, info]) => (
+                            {Object.entries(currencyData).map(([code, info]) => (
                                 <option key={code} value={code} className="bg-dark-900 text-white py-2">
                                     {code}
                                 </option>
@@ -205,7 +235,7 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
                 {selectedCurrency !== 'USD' && (
                     <div className="text-xs text-[#A5B4FC] font-bold mt-3 pl-3 flex items-center gap-2 opacity-80">
                         <i className="fas fa-exchange-alt"></i> 
-                        Current Rate: <span className="text-white">1 USD ≈ {CURRENCY_MAP[selectedCurrency]?.fallback} {selectedCurrency}</span>
+                        {ratesLoaded ? 'Live Rate:' : 'Estimated Rate:'} <span className="text-white">1 USD ≈ {currentRate.toFixed(2)} {selectedCurrency}</span>
                     </div>
                 )}
                 
