@@ -27,7 +27,7 @@ const CURRENCY_MAP: Record<string, { label: string; flag: string; fallback: numb
 // SECURE GIFT CARD CALCULATOR USING BACKEND API
 const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }> = ({ variations, product }) => {
     const [target, setTarget] = useState<string>('');
-    const [selectedCurrency, setSelectedCurrency] = useState('USD');
+    const [selectedCurrency, setSelectedCurrency] = useState('UAH'); // Default to UAH as per screenshot
     const [result, setResult] = useState<any | null>(null);
     const [loadingCalc, setLoadingCalc] = useState(false);
     const [error, setError] = useState('');
@@ -102,195 +102,128 @@ const GiftCardCalculator: React.FC<{ variations: Variation[], product: Product }
         setTarget('');
     };
 
-    // HELPER: Calculate equivalent value in user's selected currency
-    // This runs purely on frontend using CURRENCY_MAP fallback rates
-    const getUserCurrencyEquivalent = () => {
-        if (!result) return null;
-        if (selectedCurrency === 'USD') return null; // No need to convert if already USD
-        
+    // Calculate approx value for "YOU GET" display
+    const getApproxValue = () => {
+        if (!result) return '0';
         const rate = CURRENCY_MAP[selectedCurrency]?.fallback || 1;
-        // result.actualAmount is usually in USD (e.g. 0.85)
-        // 0.85 * 41.60 = ~35.36 UAH
-        const approxValue = (result.actualAmount * rate).toFixed(2);
-        
-        return `${approxValue} ${selectedCurrency}`;
+        // result.actualAmount is in USD (e.g. 8.5)
+        // 8.5 * 41.60 = 353.6 -> Round to 354
+        return (result.actualAmount * rate).toFixed(0);
     };
 
-    const userEquivalent = getUserCurrencyEquivalent();
-
     return (
-        <div className="relative group mb-10">
-            {/* GLOWING GRADIENT BORDER CONTAINER */}
-            <div className="absolute -inset-[2px] bg-gradient-to-r from-primary via-purple-500 to-blue-600 rounded-2xl opacity-75 group-hover:opacity-100 blur-sm transition-opacity duration-1000 animate-pulse-slow"></div>
-            
-            <div className="relative bg-dark-950 rounded-2xl p-6 overflow-hidden">
-                {/* Background Tech Mesh */}
-                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none"></div>
-                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-[80px] pointer-events-none"></div>
-
-                {/* HEADER */}
-                <div className="flex items-center gap-4 mb-6 relative z-10">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-dark-800 to-black border border-white/10 flex items-center justify-center shadow-lg">
-                        <i className="fas fa-microchip text-2xl text-primary drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]"></i>
-                    </div>
+        <div className="mb-10 bg-[#1e1b2e] rounded-2xl border border-white/5 shadow-2xl overflow-hidden relative font-sans">
+             {/* Header */}
+            <div className="p-6 pb-2 relative z-10">
+                <div className="flex justify-between items-start mb-4">
                     <div>
-                        <h3 className="text-xl font-black text-white uppercase italic tracking-wider flex items-center gap-2">
-                            Custom Loadout <span className="hidden sm:inline-block text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded border border-primary/30 not-italic">BETA</span>
+                        <h3 className="text-white font-black text-lg italic uppercase flex items-center gap-2 tracking-wide">
+                            <i className="fas fa-pen text-yellow-500 text-sm"></i> SMART CALCULATOR
                         </h3>
-                        <p className="text-gray-400 text-xs font-medium">Buying a game for <span className="text-white font-bold">$18.49</span>? Don't overpay. Build exact amount.</p>
+                        <p className="text-gray-400 text-xs mt-1 font-medium">
+                            Enter amount in <span className="text-white font-bold">ANY Currency</span>. We'll find the best USD card combo for your region!
+                        </p>
                     </div>
+                    <i className="fas fa-calculator text-gray-700 text-4xl opacity-50 transform rotate-12"></i>
                 </div>
 
-                {/* INPUT DASHBOARD */}
-                <div className="bg-dark-900/50 rounded-xl p-2 border border-white/5 flex flex-col sm:flex-row gap-2 relative z-10">
+                {/* Input Row */}
+                <div className="flex flex-col sm:flex-row gap-3 mb-2">
                     {/* Currency Select */}
-                    <div className="relative min-w-[120px]">
+                    <div className="relative min-w-[130px]">
                         <select 
                             value={selectedCurrency}
                             onChange={(e) => setSelectedCurrency(e.target.value)}
-                            className="w-full h-14 bg-dark-950 border border-white/10 rounded-lg pl-4 pr-8 text-white font-bold text-sm focus:border-primary focus:shadow-[0_0_15px_rgba(6,182,212,0.3)] outline-none appearance-none cursor-pointer transition-all"
+                            className="w-full h-12 bg-[#13111c] border border-white/10 rounded-lg pl-3 pr-8 text-white font-bold text-sm focus:border-primary outline-none appearance-none cursor-pointer"
                         >
                             {Object.entries(CURRENCY_MAP).map(([code, info]) => (
                                 <option key={code} value={code}>{info.flag} {code}</option>
                             ))}
                         </select>
-                        <i className="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-xs pointer-events-none"></i>
+                        <i className="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs pointer-events-none"></i>
                     </div>
 
-                    {/* Amount Input */}
-                    <div className="relative flex-1">
-                        <input 
+                    {/* Input Field */}
+                    <div className="flex-1 relative">
+                         <input 
                             type="number" 
-                            step="0.01" 
                             value={target}
                             onChange={(e) => setTarget(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleCalculate()}
-                            placeholder="Enter Amount (e.g. 10.50)"
-                            className="w-full h-14 bg-dark-950 border border-white/10 rounded-lg px-4 text-white font-mono text-lg font-bold focus:border-primary focus:shadow-[0_0_15px_rgba(6,182,212,0.3)] outline-none transition-all placeholder:text-gray-600"
+                            className="w-full h-12 bg-[#13111c] border border-white/10 rounded-lg px-4 text-white font-black text-lg focus:border-primary outline-none"
+                            placeholder="300"
                         />
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 font-bold uppercase tracking-widest pointer-events-none">
-                            VAL
-                        </div>
                     </div>
 
-                    {/* Action Button */}
+                    {/* Calculate Button */}
                     <button 
                         onClick={handleCalculate}
                         disabled={loadingCalc}
-                        className="h-14 sm:w-40 bg-white text-black font-black uppercase tracking-wider rounded-lg hover:bg-primary hover:scale-[1.02] active:scale-95 transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:scale-100"
+                        className="h-12 px-6 bg-primary hover:bg-cyan-400 text-black font-black uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center min-w-[120px]"
                     >
-                        {loadingCalc ? <i className="fas fa-circle-notch fa-spin"></i> : <><i className="fas fa-bolt"></i> Build</>}
+                        {loadingCalc ? <i className="fas fa-spinner fa-spin"></i> : 'CALCULATE'}
                     </button>
                 </div>
+
+                {/* Rate Info */}
+                {selectedCurrency !== 'USD' && (
+                    <div className="text-[10px] text-gray-500 font-medium mb-2 pl-1 flex items-center gap-2">
+                        <i className="fas fa-exchange-alt"></i> 
+                        1 USD ≈ {CURRENCY_MAP[selectedCurrency]?.fallback} {selectedCurrency}
+                    </div>
+                )}
                 
-                {error && (
-                    <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mt-3 ml-1 text-red-400 text-xs font-bold flex items-center gap-2">
-                        <i className="fas fa-exclamation-circle"></i> {error}
+                {error && <p className="text-red-400 text-xs font-bold mt-2"><i className="fas fa-exclamation-circle"></i> {error}</p>}
+            </div>
+
+            {/* Results Section */}
+            <AnimatePresence>
+                {result && (
+                    <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="bg-[#13111c] border-t border-white/5 px-6 py-6"
+                    >
+                        <div className="flex flex-col sm:flex-row justify-between items-end gap-6 mb-6">
+                            {/* Left: What You Get */}
+                            <div>
+                                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">YOU GET (APPROX)</p>
+                                <div className="text-3xl font-black text-white leading-none mb-3">
+                                    {getApproxValue()} <span className="text-xl text-gray-400">{selectedCurrency}</span>
+                                </div>
+                                
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {result.items.map((item: any, idx: number) => (
+                                        <div key={idx} className="bg-[#2e2b40] text-white text-xs font-bold px-3 py-1.5 rounded flex items-center gap-2 border border-white/5">
+                                            <i className="fas fa-dollar-sign text-gray-400 text-[10px]"></i> 
+                                            {item.denomination}
+                                            {item.quantity > 1 && <span className="text-gray-400 text-[10px] ml-1">x{item.quantity}</span>}
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-[10px] text-gray-600 italic">Actual Steam conversion may vary slightly.</p>
+                            </div>
+
+                            {/* Right: Your Price */}
+                            <div className="text-right">
+                                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">YOUR PRICE</p>
+                                <div className="text-4xl font-black text-primary tracking-tighter">
+                                    <span className="text-2xl align-top">৳</span>{result.totalBDT}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Add to Cart Button */}
+                        <button 
+                            onClick={handleAddBundle}
+                            className="w-full bg-green-500 hover:bg-green-600 text-white font-black uppercase py-4 rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2 tracking-wide text-sm md:text-base"
+                        >
+                            <i className="fas fa-shopping-cart"></i> ADD BUNDLE TO CART
+                        </button>
                     </motion.div>
                 )}
-
-                {/* RESULTS - LOOT CRATE STYLE */}
-                <AnimatePresence mode='wait'>
-                    {result && (
-                        <motion.div 
-                            key="result-box"
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }} 
-                            animate={{ opacity: 1, scale: 1, y: 0 }} 
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            transition={{ type: "spring", bounce: 0.4 }}
-                            className="mt-6 bg-gradient-to-b from-dark-900 to-black rounded-xl border border-primary/20 overflow-hidden relative shadow-2xl"
-                        >
-                             {/* Decorative Top Line */}
-                             <div className="h-1 w-full bg-gradient-to-r from-primary via-purple-500 to-primary"></div>
-
-                             {/* Header Info */}
-                             <div className="p-4 border-b border-white/5 flex flex-wrap justify-between items-center gap-3 bg-white/5 backdrop-blur-sm">
-                                 <div className="flex items-center gap-2">
-                                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                     <span className="text-green-500 font-bold uppercase text-[10px] tracking-widest">System Optimized</span>
-                                 </div>
-                                 <div className="px-3 py-1 rounded-full bg-dark-950 border border-white/10 text-xs font-mono text-gray-300 flex items-center gap-2">
-                                     {/* Show requested vs actual */}
-                                     <span>Req: <span className="text-white">{result.requestedAmount} {selectedCurrency}</span></span>
-                                     <i className="fas fa-arrow-right text-[10px] text-gray-600"></i>
-                                     <span className="text-primary font-bold">Get: {result.actualAmount} {result.currency}</span>
-                                 </div>
-                             </div>
-
-                             <div className="p-6">
-                                 {/* Warning / Info Box */}
-                                 {result.matchType === 'closest' && (
-                                     <div className="mb-6 bg-yellow-500/5 border-l-2 border-yellow-500 pl-4 py-2">
-                                         <h4 className="text-yellow-500 font-bold text-xs uppercase mb-1">Closest Match Found</h4>
-                                         <p className="text-gray-400 text-[11px]">
-                                             We couldn't make exactly {result.requestedAmount} {selectedCurrency}. 
-                                             This bundle gives you <strong className="text-white">{result.actualAmount} {result.currency}</strong>
-                                             {userEquivalent && (
-                                                 <span className="text-yellow-500 ml-1">
-                                                     (approx. ≈ {userEquivalent})
-                                                 </span>
-                                             )}.
-                                         </p>
-                                     </div>
-                                 )}
-
-                                 {/* LOOT ITEMS GRID */}
-                                 <div className="mb-8">
-                                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3 pl-1">Inventory Generated:</p>
-                                     <div className="flex flex-wrap gap-3">
-                                         {result.items.map((item: any, idx: number) => (
-                                             <motion.div 
-                                                key={idx}
-                                                initial={{ opacity: 0, y: 10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: idx * 0.1 }}
-                                                className="relative group w-28 aspect-[3/4] bg-dark-800 rounded-lg border border-white/10 hover:border-primary/50 transition-all overflow-hidden shadow-lg flex flex-col items-center justify-center p-2"
-                                             >
-                                                 {/* Quantity Badge */}
-                                                 <div className="absolute top-2 right-2 bg-white/10 text-white text-[10px] font-black px-1.5 py-0.5 rounded backdrop-blur-md border border-white/10 z-10">
-                                                     x{item.quantity}
-                                                 </div>
-                                                 
-                                                 {/* Icon */}
-                                                 <div className="w-10 h-10 mb-2 rounded-full bg-gradient-to-br from-primary/20 to-purple-500/20 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
-                                                     <i className="fas fa-gift"></i>
-                                                 </div>
-                                                 
-                                                 {/* Value */}
-                                                 <div className="text-center">
-                                                     <div className="text-xl font-black text-white leading-none">{item.denomination}</div>
-                                                     <div className="text-[9px] font-bold text-gray-500 uppercase mt-1">{result.currency}</div>
-                                                 </div>
-                                                 
-                                                 {/* Shine Effect */}
-                                                 <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
-                                             </motion.div>
-                                         ))}
-                                     </div>
-                                 </div>
-
-                                 {/* FOOTER ACTION */}
-                                 <div className="flex flex-col sm:flex-row items-end sm:items-center justify-between gap-4 pt-6 border-t border-white/5">
-                                     <div>
-                                         <p className="text-gray-500 text-[10px] uppercase font-bold tracking-widest mb-1">Total Bundle Price</p>
-                                         <div className="flex items-baseline gap-2">
-                                            <span className="text-4xl font-black text-white tracking-tighter drop-shadow-lg">৳{result.totalBDT}</span>
-                                            <span className="text-[10px] text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded border border-green-400/20 uppercase">Instant</span>
-                                         </div>
-                                     </div>
-                                     <button 
-                                         onClick={handleAddBundle}
-                                         className="w-full sm:w-auto px-8 h-14 bg-gradient-to-r from-primary to-blue-600 hover:from-white hover:to-white hover:text-black text-white font-black uppercase tracking-wider rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(255,255,255,0.4)] transition-all transform active:scale-95 flex items-center justify-center gap-3 text-sm"
-                                     >
-                                         <span>Add To Cart</span>
-                                         <i className="fas fa-arrow-right"></i>
-                                     </button>
-                                 </div>
-                             </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </div>
+            </AnimatePresence>
         </div>
     );
 };
